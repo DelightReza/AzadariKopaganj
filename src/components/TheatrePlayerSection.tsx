@@ -18,6 +18,7 @@ import {
   getYouTubeVideoMeta,
 } from '../utils/archiveLogic';
 import { ChannelAvatar, ResilientThumbnail } from './ResilientThumbnail';
+import { InbuiltVideoPlayer } from './InbuiltVideoPlayer';
 
 interface TheatrePlayerSectionProps {
   config: AppConfig;
@@ -63,7 +64,15 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
     isPlayingLive && live.title ? live.title : activeVideo.title || config.latest_video_title;
 
   const watchUrl = `https://www.youtube.com/watch?v=${currentVideoId}`;
-  const embedUrl = `https://www.youtube-nocookie.com/embed/${currentVideoId}?rel=0&modestbranding=1`;
+
+  const currentIdx = upNextVideos.findIndex(
+    (item) => (item.youtube_id || item.id) === currentVideoId
+  );
+  const previousVideo = currentIdx > 0 ? upNextVideos[currentIdx - 1] : null;
+  const nextVideo =
+    currentIdx >= 0 && currentIdx + 1 < upNextVideos.length
+      ? upNextVideos[currentIdx + 1]
+      : upNextVideos.find((item) => (item.youtube_id || item.id) !== currentVideoId) || null;
 
   const relativeTime = formatYouTubeRelativeTime(activeVideo.published);
 
@@ -109,16 +118,34 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           {/* Primary Watch Column */}
           <div className={theaterWide ? 'w-full' : 'w-full lg:flex-1 min-w-0'}>
-            {/* 16:9 YouTube Video Player */}
+            {/* 16:9 Custom Inbuilt Video Player */}
             <div className="relative aspect-video w-full rounded-xl overflow-hidden bg-black shadow-lg">
-              <iframe
+              <InbuiltVideoPlayer
                 key={currentVideoId}
-                src={embedUrl}
-                title={`YouTube video player: ${currentTitle}`}
-                className="w-full h-full border-0"
-                allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                referrerPolicy="strict-origin-when-cross-origin"
-                allowFullScreen
+                youtubeId={currentVideoId}
+                title={currentTitle}
+                thumbnailUrl={activeVideo.thumbnail}
+                isLive={isPlayingLive}
+                autoplay={true}
+                hasPrevious={Boolean(previousVideo) && !isPlayingLive}
+                onPrevious={() => {
+                  if (previousVideo) {
+                    onSelectVideo(previousVideo.youtube_id || previousVideo.id);
+                  }
+                }}
+                hasNext={Boolean(nextVideo) && !isPlayingLive}
+                onNext={() => {
+                  if (nextVideo) {
+                    onSelectVideo(nextVideo.youtube_id || nextVideo.id);
+                  }
+                }}
+                onEnded={() => {
+                  if (!isPlayingLive && nextVideo) {
+                    onSelectVideo(nextVideo.youtube_id || nextVideo.id);
+                  }
+                }}
+                theaterWide={theaterWide}
+                onToggleTheater={() => setTheaterWide((prev) => !prev)}
               />
             </div>
 

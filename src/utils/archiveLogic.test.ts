@@ -12,6 +12,7 @@ import {
   filterPosts,
   matchesVideoTopic,
 } from './archiveLogic';
+import { formatPlayerTime, formatQualityLabel } from './youtubePlayerApi';
 
 test('resolveEndpointTemplate replaces {yyyy} and zero-pads {mm}', () => {
   assert.equal(
@@ -227,4 +228,22 @@ test('matchesVideoTopic and filterVideos match Jashn, Majlis, Nauha, and Qaseeda
   assert.equal(filterVideos(sampleVideos, { topic: 'majlis' })[0].id, '2');
   assert.equal(filterVideos(sampleVideos, { topic: 'nauha' })[0].id, '3');
   assert.equal(filterVideos(sampleVideos, { topic: 'qaseeda' })[0].id, '4');
+});
+
+test('formatPlayerTime formats seconds into mm:ss and hh:mm:ss cleanly', () => {
+  assert.equal(formatPlayerTime(0), '0:00');
+  assert.equal(formatPlayerTime(65), '1:05');
+  assert.equal(formatPlayerTime(3661), '1:01:01');
+  assert.equal(formatPlayerTime(Number.NaN), '0:00');
+});
+
+test('formatQualityLabel formats YouTube quality levels cleanly', () => {
+  assert.equal(formatQualityLabel('auto'), 'Auto');
+  assert.equal(formatQualityLabel('hd1080'), '1080p HD');
+  assert.equal(formatQualityLabel('hd1080', true), '1080p');
+  assert.equal(formatQualityLabel('hd720'), '720p HD');
+  assert.equal(formatQualityLabel('large'), '480p');
+  assert.equal(formatQualityLabel('medium'), '360p');
+  assert.equal(formatQualityLabel('small'), '240p');
+  assert.equal(formatQualityLabel('tiny'), '144p');
 });

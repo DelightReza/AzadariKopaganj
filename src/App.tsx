@@ -41,6 +41,7 @@ import {
 } from './services/archiveService';
 import { TheatrePlayerSection } from './components/TheatrePlayerSection';
 import { CommunitySection } from './components/CommunitySection';
+import { InbuiltVideoPlayer } from './components/InbuiltVideoPlayer';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import {
   ChannelAvatar,
@@ -625,18 +626,42 @@ export default function App() {
                 <div className="space-y-8">
                   {/* Featured / Latest Broadcast Player */}
                   <div className="grid grid-cols-1 lg:grid-cols-12 gap-5 items-start pb-6 border-b border-neutral-200 dark:border-[#272727]">
-                    <div className="lg:col-span-6 xl:col-span-5 relative aspect-video w-full rounded-xl overflow-hidden bg-black">
-                      <iframe
-                        key={activeVideoSafe.youtube_id || activeVideoSafe.id}
-                        src={`https://www.youtube-nocookie.com/embed/${
-                          activeVideoSafe.youtube_id || activeVideoSafe.id
-                        }?rel=0&modestbranding=1`}
-                        title={activeVideoSafe.title}
-                        className="w-full h-full border-0"
-                        allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                        referrerPolicy="strict-origin-when-cross-origin"
-                        allowFullScreen
-                      />
+                    <div className="lg:col-span-6 xl:col-span-5 relative aspect-video w-full rounded-xl overflow-hidden bg-black shadow-md">
+                      {(() => {
+                        const homeIdx = videos.findIndex(
+                          (v) => (v.youtube_id || v.id) === (activeVideoSafe.youtube_id || activeVideoSafe.id)
+                        );
+                        const homePrev = homeIdx > 0 ? videos[homeIdx - 1] : null;
+                        const homeNext =
+                          homeIdx >= 0 && homeIdx < videos.length - 1
+                            ? videos[homeIdx + 1]
+                            : videos[0] || null;
+                        return (
+                          <InbuiltVideoPlayer
+                            key={activeVideoSafe.youtube_id || activeVideoSafe.id}
+                            youtubeId={activeVideoSafe.youtube_id || activeVideoSafe.id}
+                            title={activeVideoSafe.title}
+                            thumbnailUrl={activeVideoSafe.thumbnail}
+                            isLive={Boolean(
+                              live.is_live &&
+                                live.youtube_id === (activeVideoSafe.youtube_id || activeVideoSafe.id)
+                            )}
+                            autoplay={false}
+                            hasPrevious={Boolean(homePrev)}
+                            onPrevious={() => {
+                              if (homePrev) setActiveVideo(homePrev);
+                            }}
+                            hasNext={Boolean(homeNext)}
+                            onNext={() => {
+                              if (homeNext) setActiveVideo(homeNext);
+                            }}
+                            onEnded={() => {
+                              if (homeNext) setActiveVideo(homeNext);
+                            }}
+                            onToggleTheater={() => handleSelectVideoItem(activeVideoSafe)}
+                          />
+                        );
+                      })()}
                     </div>
 
                     <div className="lg:col-span-6 xl:col-span-7 space-y-2.5">
@@ -685,12 +710,23 @@ export default function App() {
                         <span>Live Now on Azadari Kopaganj</span>
                       </div>
                       <div className="aspect-video w-full max-w-3xl rounded-xl overflow-hidden bg-black">
-                        <iframe
-                          src={`https://www.youtube-nocookie.com/embed/${live.youtube_id}?rel=0&modestbranding=1`}
+                        <InbuiltVideoPlayer
+                          key={live.youtube_id}
+                          youtubeId={live.youtube_id}
                           title={live.title || 'Live Stream'}
-                          className="w-full h-full border-0"
-                          allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-                          allowFullScreen
+                          isLive={true}
+                          autoplay={false}
+                          hasNext={liveStreamVideos.length > 0}
+                          onNext={() => {
+                            if (liveStreamVideos[0]) {
+                              handleSelectVideoItem(liveStreamVideos[0]);
+                            }
+                          }}
+                          onToggleTheater={() => {
+                            setIsPlayingLive(true);
+                            setWatchingPlayerOpen(true);
+                            window.scrollTo({ top: 0, behavior: 'smooth' });
+                          }}
                         />
                       </div>
                       <h2 className="text-lg font-bold text-white">{live.title}</h2>

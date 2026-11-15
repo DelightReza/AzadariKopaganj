@@ -5,7 +5,7 @@
   "channel_url": "https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA",
   "rss_url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCyCIC43pbujKarf1irIjtrA",
   "live_url": "https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA/live",
-  "last_updated": "2026-11-14T10:16:23Z",
+  "last_updated": "2026-11-15T15:24:59Z",
   "endpoints": {
     "live": "assets/livenow.json",
     "videos_month_template": "assets/{yyyy}/{mm}/videos.json",
@@ -195,15 +195,15 @@
     "assets/2018/10/post.json",
     "assets/2018/09/post.json"
   ],
-  "latest_video_id": "9Ucq2K-1-Mo",
-  "latest_video_title": "Khatoon e Mahshar Ka Matam | 3rd Majlis | Maulana S Yusuf Ahmad Mashhadi sb | Azae Fatimiya Kopaganj",
-  "is_live": true,
+  "latest_video_id": "cxrLSfbD7aM",
+  "latest_video_title": "Khatoon e Mahshar Ka Matam | 4th Majlis | Maulana S Uroojul Hasan Misam sb | Aza e Fatimiya Kopaganj",
+  "is_live": false,
   "available_months": [
     {
       "month_year": "November 2026",
       "yyyy": "2026",
       "mm": "11",
-      "video_count": 3,
+      "video_count": 6,
       "videos_path": "assets/2026/11/videos.json",
       "post_path": "assets/2026/11/post.json"
     },

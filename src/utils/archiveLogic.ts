@@ -259,9 +259,38 @@ export function detectFeedUpdates(
   return { notifications, nextSnapshot };
 }
 
+export type VideoTopicFilter = 'all' | 'jashn' | 'majlis' | 'nauha' | 'qaseeda';
+
+/**
+ * Matches video titles against Azadari Kopaganj genre categories with spelling variants.
+ */
+export function matchesVideoTopic(title: string, topic: VideoTopicFilter): boolean {
+  if (topic === 'all') return true;
+  if (topic === 'jashn') {
+    return /\b(jash[ae]?n(?:e|-\w*)?|jashne\w*|milad\w*|wilad\w*|m[ae]hfil\w*)\b|جشن|میلاد|ولادت|محفل|जश्न/i.test(
+      title
+    );
+  }
+  if (topic === 'majlis') {
+    return /\b(maj(?:lis|alis|lish|lise|lisen|alish)(?:-\w*)?)\b|مجلس|مجالس|मजलिस/i.test(title);
+  }
+  if (topic === 'nauha') {
+    return /\b(n(?:au|o|ou)h(?:a|ay|e|ey|o|on|khan\w*|khwan\w*)?)\b|نوحہ|نوحے|نوحه|नौहा/i.test(
+      title
+    );
+  }
+  if (topic === 'qaseeda') {
+    return /\b(qas(?:eeda|ida|eeday|iday|eede|ide|idah|eedah)|moqas(?:e|i)da|manq[au]?bat\w*|munq[au]?bat\w*|mankabat\w*)\b|قصیدہ|قصیدے|منقبت|कसीदा|कसीदे|मनकबत/i.test(
+      title
+    );
+  }
+  return true;
+}
+
 export interface VideoFilterOptions {
   searchQuery?: string;
   monthKey?: string; // "all", "YYYY", or "YYYY-MM"
+  topic?: VideoTopicFilter;
   watchlistOnly?: boolean;
   watchlistIds?: string[];
 }
@@ -269,12 +298,16 @@ export interface VideoFilterOptions {
 export function filterVideos(videos: VideoItem[], options: VideoFilterOptions): VideoItem[] {
   const query = (options.searchQuery || '').trim().toLowerCase();
   const monthKey = options.monthKey || 'all';
+  const topic = options.topic || 'all';
   const watchlistSet = new Set(options.watchlistIds || []);
 
   return videos
     .filter((video) => {
       const vid = video.youtube_id || video.id;
       if (options.watchlistOnly && !watchlistSet.has(vid)) {
+        return false;
+      }
+      if (topic !== 'all' && !matchesVideoTopic(video.title || '', topic)) {
         return false;
       }
       if (monthKey !== 'all') {

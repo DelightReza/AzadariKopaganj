@@ -8,15 +8,11 @@ import {
   Bell,
   BellRing,
   CheckCircle2,
-  ExternalLink,
   Film,
   Home,
-  Menu,
   MessageSquare,
   Moon,
-  Play,
   Radio,
-  RefreshCw,
   Search,
   Sun,
   X,
@@ -36,6 +32,7 @@ import {
   formatArchiveDate,
   formatYouTubeRelativeTime,
   getYouTubeVideoMeta,
+  type VideoTopicFilter,
 } from './utils/archiveLogic';
 import {
   loadFullArchiveBundle,
@@ -44,10 +41,8 @@ import {
 } from './services/archiveService';
 import { TheatrePlayerSection } from './components/TheatrePlayerSection';
 import { CommunitySection } from './components/CommunitySection';
-import { PWAInstallButton } from './components/PWAInstallButton';
 import { OfflineIndicator } from './components/OfflineIndicator';
 import {
-  CHANNEL_BANNER_IMAGE,
   ChannelAvatar,
   ResilientThumbnail,
 } from './components/ResilientThumbnail';
@@ -80,7 +75,6 @@ export default function App() {
   const [activeSection, setActiveSection] = useState<YouTubeSectionTab>('home');
   // When a user clicks a video card, open the full 2-column YouTube Watch view
   const [watchingPlayerOpen, setWatchingPlayerOpen] = useState<boolean>(false);
-  const [sidebarExpanded, setSidebarExpanded] = useState<boolean>(false);
 
   // YouTube Dark Mode default (#0F0F0F)
   const [darkMode, setDarkMode] = useState<boolean>(() =>
@@ -94,7 +88,7 @@ export default function App() {
   // Queue & Video Grid filters
   const [selectedQueueMonth, setSelectedQueueMonth] = useState<string>('all');
   const [selectedVideoMonth, setSelectedVideoMonth] = useState<string>('all');
-  const [selectedTopicChip, setSelectedTopicChip] = useState<string>('all');
+  const [selectedTopicChip, setSelectedTopicChip] = useState<VideoTopicFilter>('all');
   const [videoSearchQuery, setVideoSearchQuery] = useState<string>('');
   const [visibleVideoCount, setVisibleVideoCount] = useState<number>(48);
 
@@ -300,24 +294,16 @@ export default function App() {
     [videos, selectedQueueMonth]
   );
 
-  const filteredGridVideos = useMemo(() => {
-    const base = filterVideos(videos, {
-      monthKey: selectedVideoMonth,
-      searchQuery: videoSearchQuery,
-      watchlistOnly: false,
-    });
-    if (selectedTopicChip === 'all') return base;
-    if (selectedTopicChip === 'jashn') {
-      return base.filter((v) => /jashn|milad|sadeqain|sajideen|samarra/i.test(v.title));
-    }
-    if (selectedTopicChip === 'majlis') {
-      return base.filter((v) => /majlis|ashura|muharram|imam/i.test(v.title));
-    }
-    if (selectedTopicChip === 'nauha') {
-      return base.filter((v) => /noha|nauha|manqabat|qasida/i.test(v.title));
-    }
-    return base;
-  }, [videos, selectedVideoMonth, videoSearchQuery, selectedTopicChip]);
+  const filteredGridVideos = useMemo(
+    () =>
+      filterVideos(videos, {
+        monthKey: selectedVideoMonth,
+        searchQuery: videoSearchQuery,
+        topic: selectedTopicChip,
+        watchlistOnly: false,
+      }),
+    [videos, selectedVideoMonth, videoSearchQuery, selectedTopicChip]
+  );
 
   const liveStreamVideos = useMemo(
     () =>
@@ -457,19 +443,10 @@ export default function App() {
     <div className="min-h-screen flex flex-col bg-white dark:bg-[#0F0F0F] text-[#0F0F0F] dark:text-[#F1F1F1]">
       <OfflineIndicator />
 
-      {/* 1. YOUTUBE TOP MASTHEAD BAR (Zero login buttons — Search, PWA Install, Theme, Notification Bell) */}
+      {/* 1. YOUTUBE TOP MASTHEAD BAR (Logo, Search, Theme, Notification Bell) */}
       <header className="sticky top-0 z-40 h-14 bg-white dark:bg-[#0F0F0F] px-3 sm:px-4 flex items-center justify-between gap-2 border-b border-neutral-200 dark:border-[#272727]">
-        {/* Left: Hamburger Menu + YouTube Logo */}
-        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={() => setSidebarExpanded((prev) => !prev)}
-            aria-label="Toggle guide sidebar"
-            className="p-2 rounded-full hover:bg-neutral-100 dark:hover:bg-[#272727] text-[#0F0F0F] dark:text-[#F1F1F1] cursor-pointer"
-          >
-            <Menu className="w-5 h-5" />
-          </button>
-
+        {/* Left: Official Azadari Kopaganj Logo */}
+        <div className="flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => handleNavigateSection('home')}
@@ -482,7 +459,7 @@ export default function App() {
                 className="h-6 w-auto object-contain"
               />
             </span>
-            <span className="font-display font-bold text-base sm:text-lg tracking-tight text-[#0F0F0F] dark:text-[#F1F1F1] whitespace-nowrap">
+            <span className="font-display font-bold text-sm sm:text-lg tracking-tight text-[#0F0F0F] dark:text-[#F1F1F1] whitespace-nowrap">
               Azadari Kopaganj
             </span>
             <span className="hidden sm:inline-block text-[10px] font-medium text-[#606060] dark:text-[#AAAAAA] self-start mt-0.5">
@@ -492,9 +469,9 @@ export default function App() {
         </div>
 
         {/* Center: YouTube Search Pill Bar */}
-        <div className="flex-1 max-w-[560px] mx-2 flex items-center">
-          <div className="flex items-center flex-1">
-            <div className="relative flex-1">
+        <div className="flex-1 max-w-[560px] mx-1 sm:mx-2 flex items-center min-w-0">
+          <div className="flex items-center flex-1 min-w-0">
+            <div className="relative flex-1 min-w-0">
               <label htmlFor="yt-masthead-search" className="sr-only">
                 Search
               </label>
@@ -509,8 +486,8 @@ export default function App() {
                     setActiveSection('videos');
                   }
                 }}
-                placeholder="Search Azadari Kopaganj..."
-                className="w-full h-10 pl-4 pr-3 text-sm rounded-l-full border border-neutral-300 dark:border-[#303030] bg-white dark:bg-[#121212] text-[#0F0F0F] dark:text-[#F1F1F1] focus:outline-none focus:border-[#1C62B9]"
+                placeholder="Search..."
+                className="w-full h-9 sm:h-10 pl-3 sm:pl-4 pr-2 sm:pr-3 text-xs sm:text-sm rounded-l-full border border-neutral-300 dark:border-[#303030] bg-white dark:bg-[#121212] text-[#0F0F0F] dark:text-[#F1F1F1] focus:outline-none focus:border-[#1C62B9]"
               />
             </div>
             <button
@@ -522,17 +499,15 @@ export default function App() {
                 }
               }}
               aria-label="Search"
-              className="h-10 px-5 rounded-r-full border border-l-0 border-neutral-300 dark:border-[#303030] bg-[#F8F8F8] dark:bg-[#222222] hover:bg-neutral-200 dark:hover:bg-[#303030] text-[#0F0F0F] dark:text-[#F1F1F1] flex items-center justify-center cursor-pointer"
+              className="h-9 sm:h-10 px-3 sm:px-5 rounded-r-full border border-l-0 border-neutral-300 dark:border-[#303030] bg-[#F8F8F8] dark:bg-[#222222] hover:bg-neutral-200 dark:hover:bg-[#303030] text-[#0F0F0F] dark:text-[#F1F1F1] flex items-center justify-center cursor-pointer shrink-0"
             >
               <Search className="w-4 h-4" />
             </button>
           </div>
         </div>
 
-        {/* Right: PWA Install Button, Theme Toggle, Notification Bell */}
+        {/* Right: Theme Toggle & Notification Bell */}
         <div className="flex items-center gap-1.5 sm:gap-2 shrink-0">
-          <PWAInstallButton />
-
           <button
             type="button"
             onClick={() => setDarkMode((prev) => !prev)}
@@ -618,203 +593,32 @@ export default function App() {
         </div>
       )}
 
-      {/* 2. YOUTUBE BODY LAYOUT: LEFT GUIDE SIDEBAR (Home, Live, Videos, Posts) + RIGHT MAIN STAGE */}
-      <div className="flex-1 flex">
-        {!watchingPlayerOpen && (
-          <aside
-            aria-label="YouTube Guide"
-            className={`hidden md:flex flex-col shrink-0 sticky top-14 h-[calc(100vh-3.5rem)] overflow-y-auto bg-white dark:bg-[#0F0F0F] px-1.5 py-2 select-none ${
-              sidebarExpanded ? 'w-52 px-2.5' : 'w-[72px]'
-            }`}
-          >
-            <div className="space-y-1">
-              {(
-                [
-                  { id: 'home', label: 'Home', icon: Home },
-                  { id: 'live', label: 'Live', icon: Radio },
-                  { id: 'videos', label: 'Videos', icon: Film },
-                  { id: 'posts', label: 'Posts', icon: MessageSquare },
-                ] as const
-              ).map((item) => {
-                const IconComp = item.icon;
-                const isActive = activeSection === item.id && !watchingPlayerOpen;
-
-                if (!sidebarExpanded) {
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      onClick={() => handleNavigateSection(item.id)}
-                      className={`w-full py-3.5 rounded-xl flex flex-col items-center justify-center gap-1.5 text-[10px] transition-colors cursor-pointer ${
-                        isActive
-                          ? 'bg-[#F2F2F2] dark:bg-[#272727] font-semibold text-[#0F0F0F] dark:text-[#F1F1F1]'
-                          : 'text-[#0F0F0F] dark:text-[#F1F1F1] hover:bg-neutral-100 dark:hover:bg-[#1F1F1F]'
-                      }`}
-                    >
-                      <IconComp className="w-5 h-5" />
-                      <span className="truncate max-w-[60px]">{item.label}</span>
-                    </button>
-                  );
-                }
-
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    onClick={() => handleNavigateSection(item.id)}
-                    className={`w-full px-3 py-2.5 rounded-xl flex items-center gap-5 text-sm transition-colors cursor-pointer ${
-                      isActive
-                        ? 'bg-[#F2F2F2] dark:bg-[#272727] font-medium text-[#0F0F0F] dark:text-[#F1F1F1]'
-                        : 'text-[#0F0F0F] dark:text-[#F1F1F1] hover:bg-neutral-100 dark:hover:bg-[#1F1F1F]'
-                    }`}
-                  >
-                    <IconComp className="w-5 h-5 shrink-0" />
-                    <span className="truncate">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-
-            {sidebarExpanded && config && (
-              <>
-                <hr className="my-3 border-neutral-200 dark:border-[#272727]" />
-                <div className="px-3 py-1">
-                  <button
-                    type="button"
-                    onClick={handleTriggerRssSync}
-                    disabled={isRefreshing}
-                    className="w-full px-3 py-2 rounded-xl bg-[#F2F2F2] dark:bg-[#1F1F1F] hover:bg-neutral-200 dark:hover:bg-[#272727] text-xs font-medium flex items-center gap-2.5 cursor-pointer"
-                  >
-                    <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                    <span>Refresh Feed</span>
-                  </button>
-                </div>
-              </>
-            )}
-          </aside>
-        )}
-
-        {/* Right Main Content Stage */}
-        <main className="flex-1 min-w-0 pb-24">
-          {loading || !config ? (
-            <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-16 text-center">
-              <div className="w-8 h-8 rounded-full border-2 border-[#FF0000] border-t-transparent animate-spin mx-auto mb-3" />
-              <p className="text-sm text-[#606060] dark:text-[#AAAAAA]">Loading YouTube feed...</p>
-            </div>
-          ) : watchingPlayerOpen ? (
-            /* FULL YOUTUBE WATCH VIEW (Opened when any video is clicked) */
-            <TheatrePlayerSection
-              config={config}
-              live={live}
-              activeVideo={activeVideoSafe}
-              isPlayingLive={isPlayingLive}
-              onSelectLiveStream={() => setIsPlayingLive(true)}
-              upNextVideos={upNextVideos}
-              onSelectVideo={handlePlayVideoById}
-              selectedQueueMonth={selectedQueueMonth}
-              onSelectQueueMonth={setSelectedQueueMonth}
-              alertsEnabled={alertsEnabled}
-              onToggleAlerts={handleToggleAlerts}
-              onRefreshFeed={handleTriggerRssSync}
-              isRefreshing={isRefreshing}
-            />
-          ) : (
-            <div className="max-w-[1380px] mx-auto px-3 sm:px-6 pt-3">
-              {/* YOUTUBE CHANNEL HEADER + UNDERLINE TABS (Home | Live | Videos | Posts) */}
-              <div className="mb-5">
-                {/* Clean Wide Architectural Channel Banner */}
-                <div className="h-28 sm:h-40 md:h-44 w-full rounded-2xl overflow-hidden bg-[#181818]">
-                  <img
-                    src={CHANNEL_BANNER_IMAGE}
-                    alt="Azadari Kopaganj Channel Banner"
-                    className="w-full h-full object-cover object-center"
-                  />
-                </div>
-
-                {/* YouTube Channel Profile Row */}
-                <div className="mt-4 flex flex-col sm:flex-row sm:items-center gap-4 sm:gap-6">
-                  <ChannelAvatar size="xl" />
-
-                  <div className="space-y-1.5 flex-1">
-                    <div className="flex items-center gap-2">
-                      <h1 className="text-2xl sm:text-3xl font-bold text-[#0F0F0F] dark:text-[#F1F1F1]">
-                        {config.channel_name}
-                      </h1>
-                      <CheckCircle2 className="w-5 h-5 text-[#AAAAAA]" />
-                    </div>
-                    <p className="text-xs sm:text-sm text-[#606060] dark:text-[#AAAAAA]">
-                      <span className="font-medium text-[#0F0F0F] dark:text-[#F1F1F1]">
-                        @AzadariKopaganj
-                      </span>{' '}
-                      • {videos.length} videos • {posts.length} posts
-                    </p>
-                    <p className="text-xs sm:text-sm text-[#606060] dark:text-[#AAAAAA] max-w-2xl">
-                      Official YouTube channel of Azadari Kopaganj (Mau). Watch live Majlis, Jashn, Shab-e-Juma, and Nauha broadcasts.
-                    </p>
-                    <div className="pt-1 flex flex-wrap items-center gap-2.5">
-                      <button
-                        type="button"
-                        onClick={handleToggleAlerts}
-                        className={`h-9 px-4 text-xs sm:text-sm font-semibold rounded-full inline-flex items-center gap-1.5 cursor-pointer ${
-                          alertsEnabled
-                            ? 'bg-[#F2F2F2] dark:bg-[#272727] text-[#0F0F0F] dark:text-[#F1F1F1]'
-                            : 'bg-[#0F0F0F] dark:bg-[#F1F1F1] text-white dark:text-[#0F0F0F]'
-                        }`}
-                      >
-                        {alertsEnabled ? (
-                          <>
-                            <BellRing className="w-4 h-4 text-[#FF0000]" />
-                            <span>Notifications On</span>
-                          </>
-                        ) : (
-                          <>
-                            <Bell className="w-4 h-4" />
-                            <span>Notify Me</span>
-                          </>
-                        )}
-                      </button>
-
-                      <a
-                        href={config.channel_url}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="h-9 px-4 text-xs sm:text-sm font-medium rounded-full bg-[#F2F2F2] dark:bg-[#272727] text-[#0F0F0F] dark:text-[#F1F1F1] hover:bg-neutral-200 dark:hover:bg-[#3F3F3F] inline-flex items-center gap-1.5"
-                      >
-                        <span>youtube.com/@AzadariKopaganj</span>
-                        <ExternalLink className="w-3.5 h-3.5" />
-                      </a>
-                    </div>
-                  </div>
-                </div>
-
-                {/* Classic YouTube Channel Underline Tab Bar (Home | Live | Videos | Posts) */}
-                <div className="mt-5 border-b border-neutral-200 dark:border-[#272727] flex items-center gap-7">
-                  {(
-                    [
-                      { id: 'home', label: 'Home' },
-                      { id: 'live', label: 'Live' },
-                      { id: 'videos', label: 'Videos' },
-                      { id: 'posts', label: 'Posts' },
-                    ] as const
-                  ).map((t) => {
-                    const active = activeSection === t.id;
-                    return (
-                      <button
-                        key={t.id}
-                        type="button"
-                        onClick={() => handleNavigateSection(t.id)}
-                        className={`pb-3 text-sm font-semibold border-b-2 transition-colors cursor-pointer ${
-                          active
-                            ? 'border-[#0F0F0F] dark:border-[#F1F1F1] text-[#0F0F0F] dark:text-[#F1F1F1]'
-                            : 'border-transparent text-[#606060] dark:text-[#AAAAAA] hover:text-[#0F0F0F] dark:hover:text-[#F1F1F1]'
-                        }`}
-                      >
-                        {t.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+      {/* 2. MAIN CONTENT STAGE (Navigated via Floating Section Navigation) */}
+      <main className="flex-1 min-w-0 pb-24">
+        {loading || !config ? (
+          <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-16 text-center">
+            <div className="w-8 h-8 rounded-full border-2 border-[#FF0000] border-t-transparent animate-spin mx-auto mb-3" />
+            <p className="text-sm text-[#606060] dark:text-[#AAAAAA]">Loading YouTube feed...</p>
+          </div>
+        ) : watchingPlayerOpen ? (
+          /* FULL YOUTUBE WATCH VIEW (Opened when any video is clicked) */
+          <TheatrePlayerSection
+            config={config}
+            live={live}
+            activeVideo={activeVideoSafe}
+            isPlayingLive={isPlayingLive}
+            onSelectLiveStream={() => setIsPlayingLive(true)}
+            upNextVideos={upNextVideos}
+            onSelectVideo={handlePlayVideoById}
+            selectedQueueMonth={selectedQueueMonth}
+            onSelectQueueMonth={setSelectedQueueMonth}
+            alertsEnabled={alertsEnabled}
+            onToggleAlerts={handleToggleAlerts}
+            onRefreshFeed={handleTriggerRssSync}
+            isRefreshing={isRefreshing}
+          />
+        ) : (
+          <div className="max-w-[1380px] mx-auto px-3 sm:px-6 pt-4 sm:pt-6">
 
               {/* TAB 1: HOME (Featured Video Player + Recent Uploads Grid) */}
               {activeSection === 'home' && (
@@ -847,18 +651,8 @@ export default function App() {
                         {formatYouTubeRelativeTime(activeVideoSafe.published)}
                       </p>
                       <p className="text-xs sm:text-sm text-[#303030] dark:text-[#CCCCCC] leading-relaxed max-w-2xl">
-                        Watch the latest Majlis and Jashn broadcast from Azadari Kopaganj. Click below to open the full theater player with the Up Next queue.
+                        Official latest Majlis and Jashn broadcast from Azadari Kopaganj (Kopaganj, Mau). Click the title or any video card to open the watch view with the Up Next queue.
                       </p>
-                      <div className="pt-1">
-                        <button
-                          type="button"
-                          onClick={() => handleSelectVideoItem(activeVideoSafe)}
-                          className="h-9 px-4 text-xs sm:text-sm font-semibold rounded-full bg-[#FF0000] text-white hover:bg-[#CC0000] inline-flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Play className="w-3.5 h-3.5 fill-white" />
-                          <span>Open Theater Player</span>
-                        </button>
-                      </div>
                     </div>
                   </div>
 
@@ -932,9 +726,10 @@ export default function App() {
                       {(
                         [
                           { id: 'all', label: `All (${videos.length})` },
-                          { id: 'jashn', label: 'Jashn & Milad' },
+                          { id: 'jashn', label: 'Jashn' },
                           { id: 'majlis', label: 'Majlis' },
-                          { id: 'nauha', label: 'Nauha & Manqabat' },
+                          { id: 'nauha', label: 'Nauha' },
+                          { id: 'qaseeda', label: 'Qaseeda' },
                         ] as const
                       ).map((chip) => {
                         const active =
@@ -944,7 +739,11 @@ export default function App() {
                             key={chip.id}
                             type="button"
                             onClick={() => {
-                              setSelectedTopicChip(chip.id);
+                              if (active && chip.id !== 'all') {
+                                setSelectedTopicChip('all');
+                              } else {
+                                setSelectedTopicChip(chip.id);
+                              }
                               setSelectedVideoMonth('all');
                               setVisibleVideoCount(48);
                             }}
@@ -966,7 +765,11 @@ export default function App() {
                             key={yyyy}
                             type="button"
                             onClick={() => {
-                              setSelectedVideoMonth(yyyy);
+                              if (active) {
+                                setSelectedVideoMonth('all');
+                              } else {
+                                setSelectedVideoMonth(yyyy);
+                              }
                               setSelectedTopicChip('all');
                               setVisibleVideoCount(48);
                             }}
@@ -1022,8 +825,7 @@ export default function App() {
               )}
             </div>
           )}
-        </main>
-      </div>
+      </main>
 
       {/* FLOATING SECTION NAVIGATION DOCK (Only Home, Live, Videos, Posts) */}
       <nav

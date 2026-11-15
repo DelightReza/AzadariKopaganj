@@ -10,6 +10,7 @@ import {
   detectFeedUpdates,
   filterVideos,
   filterPosts,
+  matchesVideoTopic,
 } from './archiveLogic';
 
 test('resolveEndpointTemplate replaces {yyyy} and zero-pads {mm}', () => {
@@ -189,4 +190,41 @@ test('filterVideos and filterPosts filter by month, query, and watchlist', () =>
   ];
   assert.equal(filterPosts(posts, { monthKey: '2026-09' }).length, 0);
   assert.equal(filterPosts(posts, { monthKey: '2026-10', searchQuery: 'imambara' }).length, 1);
+});
+
+test('matchesVideoTopic and filterVideos match Jashn, Majlis, Nauha, and Qaseeda variants accurately', () => {
+  // Jashn variants
+  assert.equal(matchesVideoTopic('Jashn-e-Wiladat Imam Husain', 'jashn'), true);
+  assert.equal(matchesVideoTopic('Jashan e Sadeqain Kopaganj', 'jashn'), true);
+  assert.equal(matchesVideoTopic('Jashne Bahar Mahfil 2025', 'jashn'), true);
+
+  // Majlis variants (without matching unrelated words like Majboor)
+  assert.equal(matchesVideoTopic('Shab-e-Juma Majlis Kopaganj', 'majlis'), true);
+  assert.equal(matchesVideoTopic('Majalis e Aza 2024', 'majlis'), true);
+  assert.equal(matchesVideoTopic('Majboor Hai Ye Zindagi', 'majlis'), false);
+
+  // Nauha variants (without matching unrelated words like Nahi or Zuljanah)
+  assert.equal(matchesVideoTopic('New Nauha 2026 Kopaganj', 'nauha'), true);
+  assert.equal(matchesVideoTopic('Mere Bhai Asghar Noha', 'nauha'), true);
+  assert.equal(matchesVideoTopic('Main So Nahi Pae | 14 Muharram', 'nauha'), false);
+  assert.equal(matchesVideoTopic('Zuljanah Juloos Kopaganj', 'nauha'), false);
+
+  // Qaseeda + Manqabat variants (without matching Qasim)
+  assert.equal(matchesVideoTopic('Qaseeda By Hashim Ali', 'qaseeda'), true);
+  assert.equal(matchesVideoTopic('Fatima (SA) Aagyi | Qasida', 'qaseeda'), true);
+  assert.equal(matchesVideoTopic('17 Rabiul Awwal Manqabat', 'qaseeda'), true);
+  assert.equal(matchesVideoTopic('Maulana Manqbat Special', 'qaseeda'), true);
+  assert.equal(matchesVideoTopic('Dr Qasim Husain Speech', 'qaseeda'), false);
+
+  const sampleVideos = [
+    { id: '1', youtube_id: '1', title: 'Jashan e Maula Ali', published: '2026-01-01T00:00:00Z', thumbnail: '' },
+    { id: '2', youtube_id: '2', title: 'Majalis e Muharram', published: '2026-01-02T00:00:00Z', thumbnail: '' },
+    { id: '3', youtube_id: '3', title: 'Noha Khwani Kopaganj', published: '2026-01-03T00:00:00Z', thumbnail: '' },
+    { id: '4', youtube_id: '4', title: 'Manqbat & Qasida', published: '2026-01-04T00:00:00Z', thumbnail: '' },
+  ];
+
+  assert.equal(filterVideos(sampleVideos, { topic: 'jashn' })[0].id, '1');
+  assert.equal(filterVideos(sampleVideos, { topic: 'majlis' })[0].id, '2');
+  assert.equal(filterVideos(sampleVideos, { topic: 'nauha' })[0].id, '3');
+  assert.equal(filterVideos(sampleVideos, { topic: 'qaseeda' })[0].id, '4');
 });

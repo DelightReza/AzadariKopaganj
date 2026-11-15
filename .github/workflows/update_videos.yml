@@ -1,0 +1,38 @@
+name: Update Azadari Kopaganj YouTube Feed & Manifests
+
+on:
+  schedule:
+    # Runs every 4 hours automatically
+    - cron: "0 */4 * * *"
+  workflow_dispatch:
+    # Allows manual trigger from the GitHub Actions tab
+
+permissions:
+  contents: write
+
+jobs:
+  sync-youtube-feed:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python 3
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Run zero-API YouTube scraper & manifest generator
+        run: python3 update_feed.py
+
+      - name: Commit and push updated JSON manifests
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add config.json assets/
+          if git diff --cached --quiet; then
+            echo "No feed changes detected."
+          else
+            git commit -m "chore(feed): sync YouTube videos, assets/livenow.json, and config.json [skip ci]"
+            git push
+          fi

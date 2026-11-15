@@ -1,0 +1,34 @@
+[
+  {
+    "id": "post_2026_10_28",
+    "date": "2026-10-28",
+    "title": "Jashn-e-Syed-us-Sajideen (A.S.) & Weekly Shab-e-Juma Majlis — Sadar Imambara Kopaganj",
+    "text": "All momineen are informed that the Jashn-e-Syed-us-Sajideen (A.S.) and weekly Shab-e-Juma Majlis recordings from Sadar Imambara, Fulelpura, Kopaganj (Mau) are now archived. Live stream coverage activates automatically on this portal via assets/livenow.json.",
+    "image_url": "https://img.youtube.com/vi/GOOvPNTUmtg/hqdefault.jpg",
+    "link_url": "https://www.youtube.com/watch?v=GOOvPNTUmtg"
+  },
+  {
+    "id": "UgkxxiB7QzCxVqnaVmkUmWsZ4neI5p1lK_yP",
+    "date": "2026-10-26",
+    "title": "Jashne Syedus Sajideen a.s.",
+    "text": "Jashne Syedus Sajideen a.s.\nKopaganj Mau",
+    "image_url": "https://yt3.ggpht.com/KcyEXQ_pkKXicMcQR6jeqS8PQUygc5CXBwdn-YkAaakW2IJXuyXWcvkKbmJEoGONktLjG4uwP8B5Kus=s3072-c-fcrop64=1,1a900000db50ffff-rw-nd-v1",
+    "link_url": "https://www.youtube.com/post/UgkxxiB7QzCxVqnaVmkUmWsZ4neI5p1lK_yP"
+  },
+  {
+    "id": "UgkxsBLzYmwyeabuW1pBw5EN6fI0vJxWohwo",
+    "date": "2026-10-26",
+    "title": "Jashne Syedus Sajideen a.s.",
+    "text": "Jashne Syedus Sajideen a.s.\n26 October 2026\nKopaganj, Mau",
+    "image_url": "https://yt3.ggpht.com/ZLsocN-SJaG3dxpGj9QqwXeCsZffkzrR_s1vrbaEtWuX3g00-81q4L3Huf4VA2jHCbCZ1cDEgbGLbA=s1706-c-fcrop64=1,2ab30000d54cffff-rw-nd-v1",
+    "link_url": "https://www.youtube.com/post/UgkxsBLzYmwyeabuW1pBw5EN6fI0vJxWohwo"
+  },
+  {
+    "id": "post_2026_10_15",
+    "date": "2026-10-15",
+    "title": "Digital Preservation of Kopaganj Jashn, Majlis & Nauha Recordings",
+    "text": "Our archival repository automatically synchronizes new uploads from the Azadari Kopaganj YouTube channel every 4 hours through our zero-API GitHub Action pipeline while preserving all manual community notices.",
+    "image_url": "https://img.youtube.com/vi/zsIt7AMVwJY/hqdefault.jpg",
+    "link_url": "https://www.youtube.com/watch?v=zsIt7AMVwJY"
+  }
+]

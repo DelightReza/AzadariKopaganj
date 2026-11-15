@@ -39,8 +39,12 @@ export const PWAInstallButton: React.FC = () => {
           <div className="w-full max-w-md rounded-2xl bg-[#212121] border border-[#3F3F3F] text-[#F1F1F1] shadow-2xl overflow-hidden">
             <div className="flex items-center justify-between px-5 py-4 border-b border-[#3F3F3F]">
               <div className="flex items-center gap-2.5">
-                <span className="w-7 h-5 rounded-md bg-[#FF0000] flex items-center justify-center">
-                  <Smartphone className="w-3.5 h-3.5 text-white" />
+                <span className="w-8 h-8 rounded-full bg-white ring-1 ring-white/20 p-1 flex items-center justify-center shrink-0 overflow-hidden">
+                  <img
+                    src="./azadari-logo.png"
+                    alt="Azadari Kopaganj Logo"
+                    className="w-full h-full object-contain"
+                  />
                 </span>
                 <h3 id="pwa-install-title" className="text-base font-bold">
                   Install Azadari Kopaganj App

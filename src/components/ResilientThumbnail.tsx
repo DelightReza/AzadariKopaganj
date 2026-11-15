@@ -55,66 +55,42 @@ interface ChannelAvatarProps {
 }
 
 /**
- * Authentic YouTube circular channel avatar with an ornate Azadari Kopaganj crest
- * instead of repetitive plain text circles.
+ * Official Azadari Kopaganj circular channel avatar rendered across the channel header,
+ * video cards, watch page owner row, and community posts.
  */
 export const ChannelAvatar: React.FC<ChannelAvatarProps> = ({
   size = 'md',
   onClick,
   className = '',
 }) => {
+  const [logoSrc, setLogoSrc] = useState<string>('./azadari-logo.png');
+
   const dimensions =
     size === 'sm'
-      ? 'w-8 h-8'
+      ? 'w-8 h-8 p-0.5'
       : size === 'lg'
-        ? 'w-12 h-12'
+        ? 'w-12 h-12 p-1'
         : size === 'xl'
-          ? 'w-20 h-20 sm:w-28 sm:h-28'
-          : 'w-9 h-9';
+          ? 'w-20 h-20 sm:w-28 sm:h-28 p-2 sm:p-2.5'
+          : 'w-9 h-9 p-1';
 
   return (
     <div
       onClick={onClick}
-      className={`${dimensions} rounded-full overflow-hidden shrink-0 select-none bg-[#181818] ring-1 ring-white/15 flex items-center justify-center ${
+      className={`${dimensions} rounded-full overflow-hidden shrink-0 select-none bg-white ring-1 ring-neutral-300 dark:ring-white/20 shadow-xs flex items-center justify-center ${
         onClick ? 'cursor-pointer' : ''
       } ${className}`}
     >
-      <svg viewBox="0 0 100 100" className="w-full h-full">
-        <defs>
-          <radialGradient id="akAvatarGrad" cx="50%" cy="35%" r="70%">
-            <stop offset="0%" stopColor="#991B1B" />
-            <stop offset="60%" stopColor="#450A0A" />
-            <stop offset="100%" stopColor="#0F0F0F" />
-          </radialGradient>
-          <linearGradient id="akGoldGrad" x1="0%" y1="0%" x2="100%" y2="100%">
-            <stop offset="0%" stopColor="#FDE68A" />
-            <stop offset="50%" stopColor="#D97706" />
-            <stop offset="100%" stopColor="#FEF3C7" />
-          </linearGradient>
-        </defs>
-        <rect width="100" height="100" fill="url(#akAvatarGrad)" />
-        <circle
-          cx="50"
-          cy="50"
-          r="43"
-          fill="none"
-          stroke="url(#akGoldGrad)"
-          strokeWidth="2.2"
-          strokeOpacity="0.85"
-        />
-        {/* Shrine Dome & Minarets Silhouette */}
-        <path
-          d="M26 70 L26 42 L29 36 L32 42 L32 70 Z M68 70 L68 42 L71 36 L74 42 L74 70 Z"
-          fill="url(#akGoldGrad)"
-          opacity="0.9"
-        />
-        <path
-          d="M35 70 C35 50, 42 36, 50 28 C58 36, 65 50, 65 70 Z"
-          fill="url(#akGoldGrad)"
-        />
-        <circle cx="50" cy="23" r="2.5" fill="#FDE68A" />
-        <rect x="22" y="69" width="56" height="4" rx="2" fill="url(#akGoldGrad)" />
-      </svg>
+      <img
+        src={logoSrc}
+        alt="Azadari Kopaganj Official Logo"
+        onError={() => {
+          if (logoSrc !== './assets/aistudio/logo_c231bb70.png') {
+            setLogoSrc('./assets/aistudio/logo_c231bb70.png');
+          }
+        }}
+        className="w-full h-full object-contain"
+      />
     </div>
   );
 };

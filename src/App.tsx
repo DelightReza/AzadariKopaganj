@@ -473,10 +473,14 @@ export default function App() {
           <button
             type="button"
             onClick={() => handleNavigateSection('home')}
-            className="flex items-center gap-1.5 cursor-pointer"
+            className="flex items-center gap-2 cursor-pointer"
           >
-            <span className="w-7 h-5 rounded-md bg-[#FF0000] flex items-center justify-center">
-              <Play className="w-3.5 h-3.5 text-white fill-white ml-0.5" />
+            <span className="h-8 px-1.5 py-0.5 rounded-lg bg-white ring-1 ring-neutral-200 dark:ring-white/15 flex items-center justify-center shrink-0">
+              <img
+                src="./azadari-logo.png"
+                alt="Azadari Kopaganj Logo"
+                className="h-6 w-auto object-contain"
+              />
             </span>
             <span className="font-display font-bold text-base sm:text-lg tracking-tight text-[#0F0F0F] dark:text-[#F1F1F1] whitespace-nowrap">
               Azadari Kopaganj

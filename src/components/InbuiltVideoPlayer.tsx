@@ -938,19 +938,36 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         />
       )}
 
-      {/* Center Play / Replay Button (Above HUD Surface) */}
-      {(!started || (!isPlaying && !isBuffering)) && !playerError && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+      {/* Center Play / Pause / Replay Button (Sole Play/Pause control in player UI) */}
+      {!isBuffering && !playerError && (
+        <div
+          className={`pointer-events-none absolute inset-0 pb-10 sm:pb-8 z-30 flex items-center justify-center transition-opacity duration-200 ${
+            hudVisible || !isPlaying || !started || isScrubbing
+              ? 'opacity-100'
+              : 'opacity-0'
+          }`}
+        >
           <button
             type="button"
-            onClick={handleTogglePlay}
-            aria-label={isEnded ? 'Replay video' : 'Play video'}
-            className="pointer-events-auto w-16 h-16 sm:w-[70px] sm:h-[70px] rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-2xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer ring-4 ring-white/25"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleTogglePlay();
+              scheduleHideHud();
+            }}
+            aria-label={isEnded ? 'Replay video' : isPlaying ? 'Pause video' : 'Play video'}
+            title={isEnded ? 'Replay' : isPlaying ? 'Pause' : 'Play'}
+            className={`${
+              hudVisible || !isPlaying || !started || isScrubbing
+                ? 'pointer-events-auto'
+                : 'pointer-events-none'
+            } w-14 h-14 sm:w-16 sm:h-16 rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-2xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer ring-4 ring-white/25`}
           >
             {isEnded ? (
-              <RotateCcw className="w-7 h-7" />
+              <RotateCcw className="w-6 h-6 sm:w-7 sm:h-7" />
+            ) : isPlaying ? (
+              <Pause className="w-6 h-6 sm:w-7 sm:h-7 fill-white" />
             ) : (
-              <Play className="w-7 h-7 fill-white ml-1" />
+              <Play className="w-6 h-6 sm:w-7 sm:h-7 fill-white ml-0.5" />
             )}
           </button>
         </div>
@@ -958,7 +975,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
       {/* 4. Buffering & Error States */}
       {isBuffering && !playerError && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center bg-black/40">
+        <div className="pointer-events-none absolute inset-0 pb-10 sm:pb-8 z-20 flex items-center justify-center bg-black/40">
           <div className="w-12 h-12 rounded-full bg-black/75 border border-white/15 flex items-center justify-center">
             <Loader2 className="w-6 h-6 text-white animate-spin" />
           </div>
@@ -966,7 +983,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       )}
 
       {skipFeedback && (
-        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 pb-10 sm:pb-8 z-20 flex items-center justify-center">
           <span className="px-4 py-1.5 rounded-full bg-black/80 text-white text-xs font-bold border border-white/20">
             {skipFeedback}
           </span>
@@ -975,7 +992,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
       {/* Ad Countdown & Auto-Skip Pill (Plays ad for 5s then skips automatically) */}
       {isAdPlaying && !playerError && (
-        <div className="absolute bottom-14 right-3 sm:right-4 z-30 flex items-center gap-2">
+        <div className="absolute bottom-20 right-3 sm:right-4 z-30 flex items-center gap-2">
           <span className="px-3 py-1.5 rounded-full bg-black/85 backdrop-blur-md text-white text-[11px] font-semibold border border-white/20 tabular-nums shadow-lg">
             {adSkipCountdown > 0
               ? `Ad · Auto-skipping in ${adSkipCountdown}s`
@@ -1042,16 +1059,16 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* 5. Custom Inbuilt Control Bar */}
+      {/* 5. Custom Inbuilt Control Bar (3-Row Layout: Bar -> Time -> Other) */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/90 via-black/60 to-transparent pt-8 pb-2.5 px-3 sm:px-4 transition-opacity duration-200 ${
+        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/75 to-transparent pt-3 sm:pt-5 pb-1.5 sm:pb-2.5 px-3 sm:px-4 transition-opacity duration-200 ${
           hudVisible || !isPlaying || !started || isScrubbing
             ? 'opacity-100'
             : 'opacity-0 pointer-events-none'
         }`}
       >
-        {/* Scrub / Slide Progress Bar (Enabled on both Live DVR and VOD) */}
+        {/* Row 1: Scrub / Slide Progress Bar (Enabled on both Live DVR and VOD) */}
         <div
           role="slider"
           aria-label="Video progress"
@@ -1067,7 +1084,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
             if (!isScrubbing) setSeekPreview(null);
           }}
           onKeyDown={handleScrubKeyDown}
-          className="relative h-5 flex items-center cursor-pointer group/scrub touch-none"
+          className="relative h-4 sm:h-5 flex items-center cursor-pointer group/scrub touch-none"
         >
           {(seekPreview || isScrubbing) && duration > 0 && (
             <div
@@ -1109,8 +1126,36 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           />
         </div>
 
-        {/* Bottom Controls Row */}
-        <div className="mt-0.5 flex items-center justify-between gap-1.5 @[580px]:gap-2 text-white">
+        {/* Row 2: Dedicated Time Row (Left: current time + optional LIVE pill, Right: total duration) */}
+        <div className="mt-0.5 flex items-center justify-between gap-2 px-0.5 text-[11px] @[580px]:text-xs font-mono text-white/95 tabular-nums leading-none">
+          <div className="flex items-center gap-1.5 min-w-0">
+            <span>{formatPlayerTime(displayTime)}</span>
+            {isLive && (
+              <button
+                type="button"
+                onClick={handleJumpToLive}
+                title={isBehindLiveEdge ? 'Jump to Live edge' : 'Live stream'}
+                aria-label={isBehindLiveEdge ? 'Jump to Live edge' : 'Live stream'}
+                className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] @[580px]:text-[10px] font-sans font-bold uppercase tracking-wider shrink-0 cursor-pointer transition-colors ${
+                  isBehindLiveEdge
+                    ? 'bg-white/15 hover:bg-white/25 text-white/80'
+                    : 'bg-black/40 text-white'
+                }`}
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    isBehindLiveEdge ? 'bg-neutral-400' : 'bg-[#FF0000] animate-pulse'
+                  }`}
+                />
+                LIVE
+              </button>
+            )}
+          </div>
+          <span>{formatPlayerTime(duration)}</span>
+        </div>
+
+        {/* Row 3: Other Controls (Playback & Utility Buttons) */}
+        <div className="mt-0.5 sm:mt-1 flex items-center justify-between gap-1.5 @[580px]:gap-2 text-white">
           <div className="flex items-center gap-0.5 @[580px]:gap-1.5 min-w-0 overflow-x-auto no-scrollbar">
             {hasPrevious && onPrevious && (
               <button
@@ -1194,33 +1239,6 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
                 aria-label="Volume"
                 className="hidden @[620px]:block w-14 @[720px]:w-16 accent-[#FF0000] h-1 cursor-pointer"
               />
-            </div>
-
-            {/* Timestamp + Live Edge Jump Pill */}
-            <div className="ml-0.5 @[580px]:ml-1 flex items-center gap-1 @[580px]:gap-2 shrink-0">
-              {isLive && (
-                <button
-                  type="button"
-                  onClick={handleJumpToLive}
-                  title={isBehindLiveEdge ? 'Jump to Live edge' : 'Live stream'}
-                  aria-label={isBehindLiveEdge ? 'Jump to Live edge' : 'Live stream'}
-                  className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] @[580px]:text-[10px] font-bold uppercase tracking-wider shrink-0 cursor-pointer transition-colors ${
-                    isBehindLiveEdge
-                      ? 'bg-white/15 hover:bg-white/25 text-white/80'
-                      : 'bg-black/40 text-white'
-                  }`}
-                >
-                  <span
-                    className={`w-1.5 h-1.5 rounded-full ${
-                      isBehindLiveEdge ? 'bg-neutral-400' : 'bg-[#FF0000] animate-pulse'
-                    }`}
-                  />
-                  LIVE
-                </button>
-              )}
-              <span className="text-[10px] @[580px]:text-xs font-mono text-white/90 tabular-nums whitespace-nowrap">
-                {formatPlayerTime(displayTime)} / {formatPlayerTime(duration)}
-              </span>
             </div>
           </div>
 

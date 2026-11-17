@@ -1,7 +1,16 @@
-name: Build Android APK (Capacitor)
+name: Build Signed Android APK & Release to GitHub Pages
 
 on:
   workflow_dispatch:
+    inputs:
+      version_name:
+        description: "App Version Name (e.g. 1.0.0)"
+        required: false
+        default: "1.0.0"
+      version_code:
+        description: "App Version Code (integer, e.g. 1)"
+        required: false
+        default: "1"
   push:
     branches:
       - main
@@ -11,18 +20,41 @@ on:
       - "index.html"
       - "package.json"
       - "capacitor.config.ts"
+      - "configure_android_app.py"
+      - ".github/workflows/build_android_apk.yml"
+
+permissions:
+  contents: write
+  pages: write
+  id-token: write
+
+concurrency:
+  group: "pages"
+  cancel-in-progress: false
 
 jobs:
-  build-android-apk:
+  build-signed-apk:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout DelightReza/AzadariKopaganj
         uses: actions/checkout@v4
 
+      - name: Set up Python 3.12 & Pillow for Adaptive Icon Generation
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Install Pillow for Android Adaptive Launcher Icons
+        run: pip install --upgrade pip pillow
+
+      - name: Sync latest YouTube RSS & live stream manifests
+        run: python3 update_feed.py
+
       - name: Set up Node.js 22
         uses: actions/setup-node@v4
         with:
           node-version: "22"
+          cache: "npm"
 
       - name: Set up JDK 21 for Android Gradle
         uses: actions/setup-java@v4
@@ -30,26 +62,120 @@ jobs:
           distribution: "temurin"
           java-version: "21"
 
-      - name: Install dependencies & build web bundle
+      - name: Install dependencies & build production web bundle
         run: |
           npm install
           npm run build
 
-      - name: Add or sync Capacitor Android platform
+      - name: Add or sync Capacitor Android platform (com.azadari.kopaganj)
         run: |
           if [ ! -d "android" ]; then
             npx cap add android
           fi
           npx cap sync android
 
-      - name: Assemble Debug APK via Gradle
+      - name: Prepare Release Keystore (From GitHub Secrets or Auto-Generated)
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          KEYSTORE_PATH="$RUNNER_TEMP/azadarikopaganj-release.jks"
+
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using ANDROID_KEYSTORE_BASE64 from GitHub Secrets..."
+            echo "$KEYSTORE_BASE64" | tr -d ' \n\r' | base64 --decode > "$KEYSTORE_PATH"
+            STORE_PASS="${KEYSTORE_PASSWORD}"
+            ALIAS_NAME="${KEY_ALIAS}"
+            KEY_PASS="${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
+          else
+            echo "No ANDROID_KEYSTORE_BASE64 secret found. Generating release keystore..."
+            STORE_PASS="AzadariKopaganj@786"
+            ALIAS_NAME="azadarikopaganj"
+            KEY_PASS="AzadariKopaganj@786"
+
+            keytool -genkeypair -v \
+              -keystore "$KEYSTORE_PATH" \
+              -storetype PKCS12 \
+              -keyalg RSA \
+              -keysize 2048 \
+              -validity 10000 \
+              -alias "$ALIAS_NAME" \
+              -storepass "$STORE_PASS" \
+              -keypass "$KEY_PASS" \
+              -dname "CN=Azadari Kopaganj, OU=Media, O=AzadariKopaganj, L=Kopaganj, ST=Uttar Pradesh, C=IN"
+          fi
+
+          echo "RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
+          echo "RELEASE_STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_ALIAS=$ALIAS_NAME" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+
+      - name: Apply App Name (Azadari Kopaganj), Package (com.azadari.kopaganj) & Adaptive Logo (logo.png / logo.svg / logo.xml)
+        env:
+          INPUT_VERSION_NAME: ${{ github.event.inputs.version_name || '1.0.0' }}
+          INPUT_VERSION_CODE: ${{ github.event.inputs.version_code || github.run_number || '1' }}
+        run: python3 configure_android_app.py
+
+      - name: Assemble Signed Release APK & AAB via Gradle
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleDebug
+          ./gradlew assembleRelease bundleRelease --no-daemon
 
-      - name: Upload AzadariKopaganj APK Artifact
+      - name: Verify APK Signature & Stage into GitHub Pages dist/
+        run: |
+          mkdir -p dist-apk
+          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
+          AAB_PATH=$(find android/app/build/outputs/bundle/release -name "*.aab" | head -n 1)
+
+          if [ -z "$APK_PATH" ]; then
+            echo "Error: Signed Release APK not found!"
+            exit 1
+          fi
+
+          # Copy signed APK into both dist-apk/ (workflow artifact) and dist/ (GitHub Pages release)
+          cp "$APK_PATH" "dist-apk/Azadari Kopaganj.apk"
+          cp "$APK_PATH" "dist-apk/Azadari-Kopaganj.apk"
+          cp "$APK_PATH" "dist/Azadari Kopaganj.apk"
+          cp "$APK_PATH" "dist/Azadari-Kopaganj.apk"
+
+          if [ -n "$AAB_PATH" ]; then
+            cp "$AAB_PATH" "dist-apk/Azadari-Kopaganj.aab"
+          fi
+
+          APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" | sort -V | tail -n 1)
+          if [ -n "$APKSIGNER" ]; then
+            "$APKSIGNER" verify --verbose --print-certs "dist-apk/Azadari Kopaganj.apk"
+          fi
+
+      - name: Upload Signed Azadari Kopaganj APK Artifact
         uses: actions/upload-artifact@v4
         with:
-          name: AzadariKopaganj-debug-apk
-          path: android/app/build/outputs/apk/debug/app-debug.apk
+          name: Azadari-Kopaganj-signed-apk
+          path: |
+            dist-apk/Azadari Kopaganj.apk
+            dist-apk/Azadari-Kopaganj.apk
+            dist-apk/Azadari-Kopaganj.aab
+          if-no-files-found: error
+          retention-days: 90
+
+      - name: Configure GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload GitHub Pages Artifact (Web Portal + Signed Azadari Kopaganj APK)
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: ./dist
+
+  deploy-to-github-pages:
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    runs-on: ubuntu-latest
+    needs: build-signed-apk
+    steps:
+      - name: Deploy Web Portal & Signed APK to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

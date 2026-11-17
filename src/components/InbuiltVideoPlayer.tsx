@@ -101,7 +101,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [isEnded, setIsEnded] = useState<boolean>(false);
   const [isAdPlaying, setIsAdPlaying] = useState<boolean>(false);
-  const [adSkipCountdown, setAdSkipCountdown] = useState<number>(5);
+  const [adSkipCountdown, setAdSkipCountdown] = useState<number>(-1);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
@@ -169,7 +169,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     setHasPlayedOnce(false);
     setIsEnded(false);
     setIsAdPlaying(false);
-    setAdSkipCountdown(5);
+    setAdSkipCountdown(-1);
     setPlayerError(null);
     setSpeedMenuOpen(false);
     setQualityMenuOpen(false);
@@ -404,41 +404,32 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     };
   }, [started, youtubeId, mediaUrl, syncAvailableQualities]);
 
-  const handleSkipAd = useCallback(
-    (allowReloadFallback = false) => {
-      const p = ytPlayerRef.current;
-      if (!p) return;
-      try {
-        const activeVidId = p.getVideoData?.()?.video_id;
-        const adDur = p.getDuration?.() ?? 0;
-        if (activeVidId && activeVidId !== youtubeId && Number.isFinite(adDur) && adDur > 0) {
-          p.seekTo(adDur, true);
-        } else if (allowReloadFallback) {
-          // Manual user-initiated fallback when YouTube locks seekTo on a long skippable music/video ad
-          const resumeAt = Math.max(0, Math.floor(lastMainTimeRef.current));
-          adStartWallTimeRef.current = Date.now();
-          p.loadVideoById({
-            videoId: youtubeId,
-            startSeconds: resumeAt,
-          });
-        }
+  const handleSkipAd = useCallback(() => {
+    const p = ytPlayerRef.current;
+    if (!p) return;
+    try {
+      const activeVidId = p.getVideoData?.()?.video_id;
+      const adDur = p.getDuration?.() ?? 0;
+      // Only fast-forward when YouTube exposes a separate skippable ad stream ID & duration.
+      // Never call loadVideoById() during an ad pod, as YouTube resets and replays Ad 1 of 2.
+      if (activeVidId && activeVidId !== youtubeId && Number.isFinite(adDur) && adDur > 0) {
+        p.seekTo(adDur, true);
         if (!isMutedRef.current) {
           p.unMute();
         }
         p.setPlaybackRate(playbackRateRef.current);
         setSkipFeedback('Ad Skipped');
         window.setTimeout(() => setSkipFeedback(null), 1100);
-      } catch {
-        // ignore
       }
-    },
-    [youtubeId]
-  );
+    } catch {
+      // ignore
+    }
+  }, [youtubeId]);
 
-  // Poll playback progress & detect multi-ad pods (e.g. non-skippable Ad 1 followed by skippable song Ad 2)
+  // Poll playback progress & detect ads without resetting ad pods back to 1 of 2
   useEffect(() => {
     if (!started || mediaUrl) return;
-    const SKIP_UNLOCK_SECONDS = 5;
+    const AUTO_SKIP_SECONDS = 5;
 
     const timer = window.setInterval(() => {
       const p = ytPlayerRef.current;
@@ -450,25 +441,26 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         const dur = p.getDuration?.() ?? 0;
 
         const readyElapsedMs = ytReadyAtRef.current ? Date.now() - ytReadyAtRef.current : 0;
-        // 1. Distinct ad video_id reported by YouTube IFrame API
-        const isDistinctAdStream = Boolean(activeVidId && activeVidId !== youtubeId);
-        // 2. Pre-roll ad pod (covers both Ad 1 non-skippable bumper AND Ad 2 long music-video ads where main video cur stays 0)
-        const isPreRollAdPod =
-          !isDistinctAdStream &&
+        // 1. Distinct skippable ad stream exposed by YouTube IFrame API (can be seeked safely)
+        const isDistinctSkippableAd = Boolean(
+          activeVidId && activeVidId !== youtubeId && Number.isFinite(dur) && dur > 0
+        );
+        // 2. Native YouTube pre-roll ad pod (Ad 1 non-skippable + Ad 2 skippable handled natively inside YouTube's frame)
+        const isNativeAdPod =
+          !isDistinctSkippableAd &&
           !userPausedRef.current &&
           !isEnded &&
-          readyElapsedMs > 450 &&
+          readyElapsedMs > 900 &&
           (playerState === -1 ||
             (adStartWallTimeRef.current !== null &&
               cur < 0.15 &&
-              lastMainTimeRef.current < 0.15 &&
-              playerState !== 2));
+              lastMainTimeRef.current < 0.15));
 
-        const adDetected = isDistinctAdStream || isPreRollAdPod;
+        const adDetected = isDistinctSkippableAd || isNativeAdPod;
         setIsAdPlaying(adDetected);
 
         if (adDetected) {
-          // Ensure poster shield is lifted so ad visuals and YouTube's native Skip button are visible
+          // Lift poster shield and unclip iframe so YouTube's real ad visuals & native Skip button are visible
           setHasPlayedOnce(true);
           setIsPlaying(true);
           setIsBuffering(false);
@@ -476,30 +468,30 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           if (adStartWallTimeRef.current === null) {
             adStartWallTimeRef.current = Date.now();
           }
-          const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
-          const elapsedAdSec =
-            isDistinctAdStream && Number.isFinite(cur) && cur > 0
-              ? Math.max(cur, wallElapsed)
-              : wallElapsed;
-          const remaining = Math.max(0, Math.ceil(SKIP_UNLOCK_SECONDS - elapsedAdSec));
-          setAdSkipCountdown(remaining);
 
-          // Only auto-seek if YouTube exposes a separate ad video_id and positive ad duration
-          if (
-            isDistinctAdStream &&
-            activeVidId &&
-            Number.isFinite(dur) &&
-            dur > 0 &&
-            elapsedAdSec >= SKIP_UNLOCK_SECONDS &&
-            autoSkipAttemptedForAdRef.current !== activeVidId
-          ) {
-            autoSkipAttemptedForAdRef.current = activeVidId;
-            handleSkipAd(false);
+          if (isDistinctSkippableAd && activeVidId) {
+            const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
+            const elapsedAdSec =
+              Number.isFinite(cur) && cur > 0 ? Math.max(cur, wallElapsed) : wallElapsed;
+            const remaining = Math.max(0, Math.ceil(AUTO_SKIP_SECONDS - elapsedAdSec));
+            setAdSkipCountdown(remaining);
+
+            if (
+              elapsedAdSec >= AUTO_SKIP_SECONDS &&
+              autoSkipAttemptedForAdRef.current !== activeVidId
+            ) {
+              autoSkipAttemptedForAdRef.current = activeVidId;
+              handleSkipAd();
+            }
+          } else {
+            // Do not show a custom Skip button on native ad pods — YouTube displays its own authentic Skip button only on skippable ads
+            setAdSkipCountdown(-1);
           }
           return;
         }
 
         adStartWallTimeRef.current = null;
+        setAdSkipCountdown(-1);
 
         const frac = p.getVideoLoadedFraction?.() ?? 0;
         if (Number.isFinite(cur) && cur >= 0) {
@@ -1076,20 +1068,21 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
               )}
             </button>
 
-            {adSkipCountdown > 0 ? (
+            {adSkipCountdown > 0 && (
               <span className="px-2.5 py-1 rounded-full bg-black/85 text-white/90 text-[11px] font-semibold border border-white/20 tabular-nums shadow-lg">
                 Skip in {adSkipCountdown}s
               </span>
-            ) : (
+            )}
+            {adSkipCountdown === 0 && (
               <button
                 type="button"
                 onClick={(e) => {
                   e.stopPropagation();
-                  handleSkipAd(true);
+                  handleSkipAd();
                 }}
                 className="px-3 py-1 rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white text-[11px] sm:text-xs font-bold shadow-2xl ring-1 ring-white/30 flex items-center gap-1 cursor-pointer transition-transform hover:scale-105"
               >
-                <span>Skip to Video</span>
+                <span>Skip Ad</span>
                 <FastForward className="w-3.5 h-3.5 fill-white" />
               </button>
             )}

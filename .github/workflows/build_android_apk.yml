@@ -136,22 +136,22 @@ jobs:
             --v2-signing-enabled true \
             --v3-signing-enabled true \
             --v4-signing-enabled false \
-            --out "dist-apk/Azadari Kopaganj.apk" \
+            --out "dist-apk/Azadari-Kopaganj.apk" \
             "dist-apk/aligned.apk"
 
           rm -f "dist-apk/aligned.apk"
 
           # 3. Verify APK signature and print certificate digests (fails the build if unsigned or invalid)
           echo "Verifying signed APK certificate..."
-          "$APKSIGNER" verify --verbose --print-certs "dist-apk/Azadari Kopaganj.apk"
+          "$APKSIGNER" verify --verbose --print-certs "dist-apk/Azadari-Kopaganj.apk"
 
           # 4. Sign AAB bundle if present
           if [ -n "$RAW_AAB" ]; then
-            cp "$RAW_AAB" "dist-apk/Azadari Kopaganj.aab"
+            cp "$RAW_AAB" "dist-apk/Azadari-Kopaganj.aab"
             jarsigner -keystore "$RELEASE_STORE_FILE" \
               -storepass "${RELEASE_STORE_PASSWORD}" \
               -keypass "${RELEASE_KEY_PASSWORD}" \
-              "dist-apk/Azadari Kopaganj.aab" "${RELEASE_KEY_ALIAS}"
+              "dist-apk/Azadari-Kopaganj.aab" "${RELEASE_KEY_ALIAS}"
           fi
 
       - name: Upload Signed Azadari Kopaganj APK Artifact
@@ -159,8 +159,8 @@ jobs:
         with:
           name: Azadari-Kopaganj-signed-apk
           path: |
-            dist-apk/Azadari Kopaganj.apk
-            dist-apk/Azadari Kopaganj.aab
+            dist-apk/Azadari-Kopaganj.apk
+            dist-apk/Azadari-Kopaganj.aab
           if-no-files-found: error
           retention-days: 90
 
@@ -172,6 +172,6 @@ jobs:
           body: |
             Official signed Android release for **Azadari Kopaganj** (`com.azadari.kopaganj`).
           files: |
-            dist-apk/Azadari Kopaganj.apk
-            dist-apk/Azadari Kopaganj.aab
+            dist-apk/Azadari-Kopaganj.apk
+            dist-apk/Azadari-Kopaganj.aab
           prerelease: false

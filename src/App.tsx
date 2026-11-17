@@ -778,7 +778,11 @@ export default function App() {
       </header>
 
       {/* 2. MAIN CONTENT STAGE (Navigated via Floating Section Navigation) */}
-      <main className="flex-1 min-w-0 pb-24">
+      <main
+        className={`flex-1 min-w-0 ${
+          watchingPlayerOpen ? 'pb-24 max-lg:[@media(min-height:540px)]:pb-0' : 'pb-24'
+        }`}
+      >
         {loading || !config ? (
           <div className="max-w-[1400px] mx-auto px-4 sm:px-6 py-20 text-center">
             <div className="w-8 h-8 rounded-full border-2 border-[#DC2626] border-t-transparent animate-spin mx-auto mb-3" />

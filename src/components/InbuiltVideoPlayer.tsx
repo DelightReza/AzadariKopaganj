@@ -107,6 +107,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const [duration, setDuration] = useState<number>(0);
   const [bufferedRatio, setBufferedRatio] = useState<number>(0);
   const lastMainTimeRef = useRef<number>(0);
+  const activeAdIdRef = useRef<string | null>(null);
   const autoSkipAttemptedForAdRef = useRef<string | null>(null);
   const adStartWallTimeRef = useRef<number | null>(null);
   const ytReadyAtRef = useRef<number | null>(null);
@@ -182,6 +183,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     setIsPlaying(false);
     setIsBuffering(autoplay);
     lastMainTimeRef.current = 0;
+    activeAdIdRef.current = null;
     autoSkipAttemptedForAdRef.current = null;
     adStartWallTimeRef.current = null;
     ytReadyAtRef.current = null;
@@ -470,7 +472,11 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           }
 
           if (isDistinctSkippableAd && activeVidId) {
-            const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
+            if (activeAdIdRef.current !== activeVidId) {
+              activeAdIdRef.current = activeVidId;
+              adStartWallTimeRef.current = Date.now();
+            }
+            const wallElapsed = (Date.now() - (adStartWallTimeRef.current ?? Date.now())) / 1000;
             const elapsedAdSec =
               Number.isFinite(cur) && cur > 0 ? Math.max(cur, wallElapsed) : wallElapsed;
             const remaining = Math.max(0, Math.ceil(AUTO_SKIP_SECONDS - elapsedAdSec));
@@ -485,11 +491,14 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
             }
           } else {
             // Do not show a custom Skip button on native ad pods — YouTube displays its own authentic Skip button only on skippable ads
+            activeAdIdRef.current = null;
             setAdSkipCountdown(-1);
           }
           return;
         }
 
+        activeAdIdRef.current = null;
+        autoSkipAttemptedForAdRef.current = null;
         adStartWallTimeRef.current = null;
         setAdSkipCountdown(-1);
 
@@ -696,7 +705,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           } else {
             p.setPlaybackQualityRange?.(level, level);
             p.setPlaybackQuality?.(level);
-            if (!isLive && isPlaying) {
+            if (!isLive && isPlaying && !isAdPlaying) {
               const cur = p.getCurrentTime?.() ?? currentTime;
               p.loadVideoById({
                 videoId: youtubeId,
@@ -715,7 +724,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         }
       }
     },
-    [mediaUrl, isLive, isPlaying, currentTime, youtubeId, syncAvailableQualities]
+    [mediaUrl, isLive, isPlaying, isAdPlaying, currentTime, youtubeId, syncAvailableQualities]
   );
 
   const handleToggleFullscreen = useCallback(async () => {

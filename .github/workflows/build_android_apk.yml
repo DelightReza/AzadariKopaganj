@@ -74,43 +74,25 @@ jobs:
           fi
           npx cap sync android
 
-      - name: Prepare Release Keystore (From GitHub Secrets or Auto-Generated)
+      - name: Decode Release Keystore from GitHub Secrets
         env:
           KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
           KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
           KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
-          KEYSTORE_PATH="$RUNNER_TEMP/azadarikopaganj-release.jks"
-
-          if [ -n "$KEYSTORE_BASE64" ]; then
-            echo "Using ANDROID_KEYSTORE_BASE64 from GitHub Secrets..."
-            echo "$KEYSTORE_BASE64" | tr -d ' \n\r' | base64 --decode > "$KEYSTORE_PATH"
-            STORE_PASS="${KEYSTORE_PASSWORD}"
-            ALIAS_NAME="${KEY_ALIAS}"
-            KEY_PASS="${KEY_PASSWORD:-$KEYSTORE_PASSWORD}"
-          else
-            echo "No ANDROID_KEYSTORE_BASE64 secret found. Generating release keystore..."
-            STORE_PASS="AzadariKopaganj@786"
-            ALIAS_NAME="azadarikopaganj"
-            KEY_PASS="AzadariKopaganj@786"
-
-            keytool -genkeypair -v \
-              -keystore "$KEYSTORE_PATH" \
-              -storetype PKCS12 \
-              -keyalg RSA \
-              -keysize 2048 \
-              -validity 10000 \
-              -alias "$ALIAS_NAME" \
-              -storepass "$STORE_PASS" \
-              -keypass "$KEY_PASS" \
-              -dname "CN=Azadari Kopaganj, OU=Media, O=AzadariKopaganj, L=Kopaganj, ST=Uttar Pradesh, C=IN"
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "Error: ANDROID_KEYSTORE_BASE64 secret is not configured in GitHub Repository Secrets."
+            exit 1
           fi
 
+          KEYSTORE_PATH="$RUNNER_TEMP/azadarikopaganj-release.jks"
+          echo "$KEYSTORE_BASE64" | tr -d ' \n\r' | base64 --decode > "$KEYSTORE_PATH"
+
           echo "RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-          echo "RELEASE_STORE_PASSWORD=$STORE_PASS" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_ALIAS=$ALIAS_NAME" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+          echo "RELEASE_STORE_PASSWORD=${KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_ALIAS=${KEY_ALIAS}" >> "$GITHUB_ENV"
+          echo "RELEASE_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
 
       - name: Apply App Name (Azadari Kopaganj), Package (com.azadari.kopaganj) & Adaptive Logo (logo.png / logo.svg / logo.xml)
         env:

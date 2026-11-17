@@ -4,7 +4,7 @@ Configures the Capacitor Android project for Azadari Kopaganj:
 - App Name: Azadari Kopaganj
 - Package Name: com.azadari.kopaganj
 - Launcher Icons: Applies logo.png / logo.svg and adaptive icon logo.xml across all mipmap densities
-- Release Signing: Configures Gradle V1/V2/V3/V4 release signing
+- Versioning & Signing: Injects versionCode, versionName, and release signingConfigs into android/app/build.gradle
 """
 
 import os
@@ -85,7 +85,7 @@ def update_adaptive_icons(res_dir: Path) -> None:
         print("[configure_android_app] Warning: logo.png not found; skipping mipmap PNG generation")
         return
 
-    # 3. Generate resized mipmap PNGs (using Pillow if available, or copying logo.png directly)
+    # 3. Generate resized mipmap PNGs
     try:
         from PIL import Image, ImageDraw
 
@@ -136,43 +136,43 @@ def update_adaptive_icons(res_dir: Path) -> None:
 def update_build_gradle(app_build_gradle: Path) -> None:
     if not app_build_gradle.is_file():
         return
+    version_code = os.environ.get("INPUT_VERSION_CODE", "1").strip() or "1"
+    version_name = os.environ.get("INPUT_VERSION_NAME", "1.0.0").strip() or "1.0.0"
+
     text = app_build_gradle.read_text(encoding="utf-8")
     text = re.sub(r'namespace\s+["\'][^"\']+["\']', f'namespace "{PACKAGE_ID}"', text)
     text = re.sub(r'applicationId\s+["\'][^"\']+["\']', f'applicationId "{PACKAGE_ID}"', text)
+    text = re.sub(r'versionCode\s+\d+', f'versionCode {version_code}', text)
+    text = re.sub(r'versionName\s+["\'][^"\']+["\']', f'versionName "{version_name}"', text)
 
-    signing_block = """
-android {
-    defaultConfig {
-        applicationId "com.azadari.kopaganj"
-        versionCode Integer.parseInt(System.getenv("INPUT_VERSION_CODE") ?: "1")
-        versionName System.getenv("INPUT_VERSION_NAME") ?: "1.0.0"
-        setProperty("archivesBaseName", "Azadari-Kopaganj")
-    }
-    signingConfigs {
+    signing_config_dsl = """    signingConfigs {
         release {
-            storeFile file(System.getenv("RELEASE_STORE_FILE"))
-            storePassword System.getenv("RELEASE_STORE_PASSWORD")
-            keyAlias System.getenv("RELEASE_KEY_ALIAS")
-            keyPassword System.getenv("RELEASE_KEY_PASSWORD")
-            enableV1Signing true
-            enableV2Signing true
-            enableV3Signing true
-            enableV4Signing true
+            if (System.getenv("RELEASE_STORE_FILE")) {
+                storeFile file(System.getenv("RELEASE_STORE_FILE"))
+                storePassword System.getenv("RELEASE_STORE_PASSWORD")
+                keyAlias System.getenv("RELEASE_KEY_ALIAS")
+                keyPassword System.getenv("RELEASE_KEY_PASSWORD")
+                v1SigningEnabled true
+                v2SigningEnabled true
+            }
         }
     }
-    buildTypes {
-        release {
-            signingConfig signingConfigs.release
-            minifyEnabled false
-            shrinkResources false
-        }
-    }
-}
-"""
-    if "signingConfigs" not in text:
-        text = text + "\n" + signing_block
+    buildTypes {"""
+
+    if "signingConfigs" not in text and "buildTypes {" in text:
+        text = text.replace("buildTypes {", signing_config_dsl, 1)
+        text = re.sub(
+            r'(buildTypes\s*\{\s*release\s*\{)',
+            r'\1\n            signingConfig signingConfigs.release',
+            text,
+            count=1,
+        )
+
     app_build_gradle.write_text(text, encoding="utf-8")
-    print(f"[configure_android_app] Configured {app_build_gradle} for {PACKAGE_ID} and release signing")
+    print(
+        f"[configure_android_app] Configured {app_build_gradle} "
+        f"(pkg={PACKAGE_ID}, versionName={version_name}, versionCode={version_code})"
+    )
 
 
 def main() -> None:

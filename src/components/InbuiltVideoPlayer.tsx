@@ -113,6 +113,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const ytReadyAtRef = useRef<number | null>(null);
   const userPausedRef = useRef<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isAdMuted, setIsAdMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(100);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [speedMenuOpen, setSpeedMenuOpen] = useState<boolean>(false);
@@ -137,6 +138,8 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   volumeRef.current = volume;
   const isMutedRef = useRef<boolean>(isMuted);
   isMutedRef.current = isMuted;
+  const isAdMutedRef = useRef<boolean>(isAdMuted);
+  isAdMutedRef.current = isAdMuted;
   const playbackRateRef = useRef<number>(playbackRate);
   playbackRateRef.current = playbackRate;
   const selectedQualityRef = useRef<YouTubeQualityLevel>(selectedQuality);
@@ -170,6 +173,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     setHasPlayedOnce(false);
     setIsEnded(false);
     setIsAdPlaying(false);
+    setIsAdMuted(false);
     setAdSkipCountdown(-1);
     setPlayerError(null);
     setSpeedMenuOpen(false);
@@ -502,6 +506,16 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         adStartWallTimeRef.current = null;
         setAdSkipCountdown(-1);
 
+        // Restore main video audio immediately after an ad finishes if user only muted the ad
+        if (isAdMutedRef.current) {
+          isAdMutedRef.current = false;
+          setIsAdMuted(false);
+          if (!isMutedRef.current && volumeRef.current > 0) {
+            p.unMute();
+            p.setVolume(volumeRef.current);
+          }
+        }
+
         const frac = p.getVideoLoadedFraction?.() ?? 0;
         if (Number.isFinite(cur) && cur >= 0) {
           setCurrentTime(cur);
@@ -644,6 +658,25 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       }
     }
   }, [isMuted, mediaUrl]);
+
+  const handleToggleAdMute = useCallback(() => {
+    const nextAdMuted = !isAdMuted;
+    setIsAdMuted(nextAdMuted);
+    isAdMutedRef.current = nextAdMuted;
+    const p = ytPlayerRef.current;
+    if (p) {
+      try {
+        if (nextAdMuted) {
+          p.mute();
+        } else if (!isMutedRef.current && volumeRef.current > 0) {
+          p.unMute();
+          p.setVolume(volumeRef.current);
+        }
+      } catch {
+        // ignore
+      }
+    }
+  }, [isAdMuted]);
 
   const handleVolumeChange = useCallback(
     (nextVol: number) => {
@@ -1059,12 +1092,12 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleToggleMute();
+                handleToggleAdMute();
               }}
-              aria-label={isMuted || volume === 0 ? 'Unmute ad' : 'Mute ad'}
+              aria-label={isAdMuted || isMuted || volume === 0 ? 'Unmute ad' : 'Mute ad'}
               className="px-2 py-0.5 rounded-full bg-black/80 hover:bg-black text-white text-[10px] font-semibold border border-white/25 flex items-center gap-1 cursor-pointer shadow"
             >
-              {isMuted || volume === 0 ? (
+              {isAdMuted || isMuted || volume === 0 ? (
                 <>
                   <VolumeX className="w-3 h-3 text-[#FF4D4D]" />
                   <span>Unmute</span>

@@ -109,6 +109,8 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const lastMainTimeRef = useRef<number>(0);
   const autoSkipAttemptedForAdRef = useRef<string | null>(null);
   const adStartWallTimeRef = useRef<number | null>(null);
+  const ytReadyAtRef = useRef<number | null>(null);
+  const userPausedRef = useRef<boolean>(false);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(100);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
@@ -182,6 +184,8 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     lastMainTimeRef.current = 0;
     autoSkipAttemptedForAdRef.current = null;
     adStartWallTimeRef.current = null;
+    ytReadyAtRef.current = null;
+    userPausedRef.current = false;
   }, [youtubeId, mediaUrl, autoplay]);
 
   const scheduleHideHud = useCallback(() => {
@@ -236,6 +240,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     if (!started || mediaUrl || !youtubeId) return;
 
     let cancelled = false;
+    let readyRevealTimer: number | null = null;
     setIsBuffering(true);
     setPlayerError(null);
 
@@ -280,6 +285,8 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
             onReady: (ev) => {
               if (cancelled) return;
               try {
+                ytReadyAtRef.current = Date.now();
+                userPausedRef.current = false;
                 ev.target.setVolume(volumeRef.current);
                 if (isMutedRef.current) ev.target.mute();
                 else ev.target.unMute();
@@ -293,6 +300,14 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
                 }
                 syncAvailableQualities(ev.target);
                 ev.target.playVideo();
+                // Reveal iframe visuals immediately once playback/ad begins (even when YT reports UNSTARTED -1 during pre-roll ads)
+                setIsPlaying(true);
+                readyRevealTimer = window.setTimeout(() => {
+                  if (!cancelled) {
+                    setHasPlayedOnce(true);
+                    setIsBuffering(false);
+                  }
+                }, 350);
               } catch {
                 // ignore initial play errors
               }
@@ -301,6 +316,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
               if (cancelled) return;
               const st = ev.data;
               if (st === YT.PlayerState.PLAYING) {
+                userPausedRef.current = false;
                 setHasPlayedOnce(true);
                 setIsPlaying(true);
                 setIsBuffering(false);
@@ -324,11 +340,17 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
                   // ignore
                 }
               } else if (st === YT.PlayerState.PAUSED) {
-                setIsPlaying(false);
-                setIsBuffering(false);
-                setHudVisible(true);
+                // Only show paused overlay if the user explicitly paused or main video is active
+                if (userPausedRef.current) {
+                  setIsPlaying(false);
+                  setIsBuffering(false);
+                  setHudVisible(true);
+                }
               } else if (st === YT.PlayerState.BUFFERING) {
-                setIsBuffering(true);
+                // Avoid covering active pre-roll ad visuals with buffering backdrop
+                if (!adStartWallTimeRef.current) {
+                  setIsBuffering(true);
+                }
               } else if (st === YT.PlayerState.ENDED) {
                 setIsPlaying(false);
                 setIsBuffering(false);
@@ -365,6 +387,9 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
     return () => {
       cancelled = true;
+      if (readyRevealTimer) {
+        window.clearTimeout(readyRevealTimer);
+      }
       if (ytPlayerRef.current) {
         try {
           ytPlayerRef.current.destroy();
@@ -383,37 +408,27 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     const p = ytPlayerRef.current;
     if (!p) return;
     try {
-      const adDur = p.getDuration();
-      if (Number.isFinite(adDur) && adDur > 0) {
-        p.seekTo(adDur, true);
+      // Seeking to >=1s on loadVideoById forces YouTube's IFrame Player to bypass the pre-roll/mid-roll ad slot and jump straight into the main video stream
+      const resumeAt = isLive ? 0 : Math.max(1, Math.floor(lastMainTimeRef.current || 1));
+      p.loadVideoById({
+        videoId: youtubeId,
+        startSeconds: resumeAt,
+        ...(selectedQualityRef.current !== 'auto'
+          ? { suggestedQuality: selectedQualityRef.current }
+          : {}),
+      });
+      p.playVideo();
+      if (!isMutedRef.current) {
+        p.unMute();
       }
-      // Verify after 550ms whether seeking ended the ad; if still on ad stream, re-cue main video
-      window.setTimeout(() => {
-        const curPlayer = ytPlayerRef.current;
-        if (!curPlayer) return;
-        try {
-          const currentLoadedId = curPlayer.getVideoData?.()?.video_id;
-          if (currentLoadedId && currentLoadedId !== youtubeId) {
-            const resumeAt = Math.max(0, Math.floor(lastMainTimeRef.current || 0));
-            curPlayer.loadVideoById({
-              videoId: youtubeId,
-              startSeconds: isLive ? 0 : resumeAt,
-              ...(selectedQualityRef.current !== 'auto'
-                ? { suggestedQuality: selectedQualityRef.current }
-                : {}),
-            });
-          }
-          if (!isMutedRef.current) {
-            curPlayer.unMute();
-          }
-          curPlayer.setPlaybackRate(playbackRateRef.current);
-        } catch {
-          // ignore
-        }
-      }, 550);
+      p.setPlaybackRate(playbackRateRef.current);
 
+      setHasPlayedOnce(true);
+      setIsPlaying(true);
+      setIsBuffering(false);
       setIsAdPlaying(false);
       adStartWallTimeRef.current = null;
+      ytReadyAtRef.current = Date.now();
       setSkipFeedback('Ad Skipped');
       window.setTimeout(() => setSkipFeedback(null), 1100);
     } catch {
@@ -421,7 +436,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     }
   }, [youtubeId, isLive]);
 
-  // Poll playback progress cleanly for YT engine (paused while user drags slider)
+  // Poll playback progress & detect/auto-skip ads after 5 seconds
   useEffect(() => {
     if (!started || mediaUrl) return;
     const AUTO_SKIP_AFTER_SECONDS = 5;
@@ -431,26 +446,45 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       if (!p || isScrubbing) return;
       try {
         const activeVidId = p.getVideoData?.()?.video_id;
-        const adDetected = Boolean(activeVidId && activeVidId !== youtubeId);
+        const playerState = p.getPlayerState?.();
+        const cur = p.getCurrentTime?.() ?? 0;
+        const dur = p.getDuration?.() ?? 0;
+
+        // Detect ad either by mismatched video_id OR by YT staying in UNSTARTED (-1) / t=0 while playing a pre-roll ad after onReady
+        const readyElapsedMs = ytReadyAtRef.current ? Date.now() - ytReadyAtRef.current : 0;
+        const isVideoIdMismatch = Boolean(activeVidId && activeVidId !== youtubeId);
+        const isPreRollUnstartedAd =
+          !userPausedRef.current &&
+          !isEnded &&
+          readyElapsedMs > 900 &&
+          (playerState === -1 || (cur === 0 && dur === 0));
+
+        const adDetected = isVideoIdMismatch || isPreRollUnstartedAd;
         setIsAdPlaying(adDetected);
 
-        if (adDetected && activeVidId) {
+        if (adDetected) {
+          // Ensure poster shield is lifted so ad visuals are always visible
+          setHasPlayedOnce(true);
+          setIsPlaying(true);
+          setIsBuffering(false);
+
           if (adStartWallTimeRef.current === null) {
             adStartWallTimeRef.current = Date.now();
           }
-          const adCur = p.getCurrentTime();
           const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
           const elapsedAdSec =
-            Number.isFinite(adCur) && adCur > 0 ? Math.max(adCur, wallElapsed) : wallElapsed;
+            isVideoIdMismatch && Number.isFinite(cur) && cur > 0
+              ? Math.max(cur, wallElapsed)
+              : wallElapsed;
           const remaining = Math.max(0, Math.ceil(AUTO_SKIP_AFTER_SECONDS - elapsedAdSec));
           setAdSkipCountdown(remaining);
 
-          // Once the 5-second skippable window has played, automatically skip the ad
+          const adKey = activeVidId && activeVidId !== youtubeId ? activeVidId : `preroll-${ytReadyAtRef.current}`;
           if (
             elapsedAdSec >= AUTO_SKIP_AFTER_SECONDS &&
-            autoSkipAttemptedForAdRef.current !== activeVidId
+            autoSkipAttemptedForAdRef.current !== adKey
           ) {
-            autoSkipAttemptedForAdRef.current = activeVidId;
+            autoSkipAttemptedForAdRef.current = adKey;
             handleSkipAd();
           }
           return;
@@ -458,10 +492,8 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
         adStartWallTimeRef.current = null;
 
-        const cur = p.getCurrentTime();
-        const dur = p.getDuration();
-        const frac = p.getVideoLoadedFraction();
-        if (Number.isFinite(cur)) {
+        const frac = p.getVideoLoadedFraction?.() ?? 0;
+        if (Number.isFinite(cur) && cur >= 0) {
           setCurrentTime(cur);
           if (cur > 0) {
             lastMainTimeRef.current = cur;
@@ -481,10 +513,11 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       }
     }, 250);
     return () => window.clearInterval(timer);
-  }, [started, mediaUrl, isScrubbing, youtubeId, isShort, isLive, handleSkipAd]);
+  }, [started, mediaUrl, isScrubbing, youtubeId, isShort, isLive, isEnded, handleSkipAd]);
 
   const handleTogglePlay = useCallback(() => {
     if (!started) {
+      userPausedRef.current = false;
       setStarted(true);
       setIsBuffering(true);
       return;
@@ -493,8 +526,10 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     if (mediaUrl && nativeVideoRef.current) {
       const el = nativeVideoRef.current;
       if (el.paused) {
+        userPausedRef.current = false;
         el.play().catch(() => undefined);
       } else {
+        userPausedRef.current = true;
         el.pause();
       }
       return;
@@ -504,13 +539,20 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     if (!p) return;
     try {
       if (isEnded) {
+        userPausedRef.current = false;
         p.seekTo(0, true);
         p.playVideo();
         setIsEnded(false);
+        setIsPlaying(true);
       } else if (isPlaying) {
+        userPausedRef.current = true;
         p.pauseVideo();
+        setIsPlaying(false);
+        setHudVisible(true);
       } else {
+        userPausedRef.current = false;
         p.playVideo();
+        setIsPlaying(true);
       }
     } catch {
       // ignore

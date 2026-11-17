@@ -109,10 +109,9 @@ jobs:
           fi
 
           cp "$APK_PATH" "dist-apk/Azadari Kopaganj.apk"
-          cp "$APK_PATH" "dist-apk/Azadari-Kopaganj.apk"
 
           if [ -n "$AAB_PATH" ]; then
-            cp "$AAB_PATH" "dist-apk/Azadari-Kopaganj.aab"
+            cp "$AAB_PATH" "dist-apk/Azadari Kopaganj.aab"
           fi
 
           APKSIGNER=$(find "$ANDROID_HOME/build-tools" -name "apksigner" | sort -V | tail -n 1)
@@ -126,8 +125,7 @@ jobs:
           name: Azadari-Kopaganj-signed-apk
           path: |
             dist-apk/Azadari Kopaganj.apk
-            dist-apk/Azadari-Kopaganj.apk
-            dist-apk/Azadari-Kopaganj.aab
+            dist-apk/Azadari Kopaganj.aab
           if-no-files-found: error
           retention-days: 90
 
@@ -140,6 +138,5 @@ jobs:
             Official signed Android release for **Azadari Kopaganj** (`com.azadari.kopaganj`).
           files: |
             dist-apk/Azadari Kopaganj.apk
-            dist-apk/Azadari-Kopaganj.apk
-            dist-apk/Azadari-Kopaganj.aab
+            dist-apk/Azadari Kopaganj.aab
           prerelease: false

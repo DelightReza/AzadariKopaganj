@@ -6,6 +6,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   ArrowRight,
+  BellRing,
   CheckCircle2,
   Film,
   Home,
@@ -42,6 +43,11 @@ import {
   type YouTubeSectionTab,
 } from './utils/appRouting';
 import { loadFullArchiveBundle } from './services/archiveService';
+import {
+  initBackgroundNotificationSync,
+  processFeedSyncNotifications,
+  promptToAllowNativeNotifications,
+} from './services/notificationSyncService';
 import { TheatrePlayerSection } from './components/TheatrePlayerSection';
 import { CommunitySection } from './components/CommunitySection';
 import { InbuiltVideoPlayer } from './components/InbuiltVideoPlayer';
@@ -118,6 +124,7 @@ export default function App() {
   const [isDesktop, setIsDesktop] = useState<boolean>(() =>
     typeof window !== 'undefined' ? window.matchMedia('(min-width: 640px)').matches : true
   );
+  const [notificationPromptOpen, setNotificationPromptOpen] = useState<boolean>(false);
 
   const videosRef = useRef<VideoItem[]>(videos);
   videosRef.current = videos;
@@ -126,6 +133,7 @@ export default function App() {
   const lastRouteHashRef = useRef<string>(buildAppHash(initialRoute));
   const inAppNavDepthRef = useRef<number>(0);
   const scrollCacheRef = useRef<Map<string, number>>(new Map());
+  const lastFetchAtRef = useRef<number>(0);
 
   const currentRouteRef = useRef<ParsedAppRoute>(initialRoute);
   currentRouteRef.current = {
@@ -260,13 +268,71 @@ export default function App() {
     [commitRoute]
   );
 
+  const navigateFromNotification = useCallback(
+    (routeHash: string) => {
+      const parsed = parseAppRoute(routeHash);
+      desiredWatchIdRef.current = parsed.watchId;
+      desiredLiveRef.current = parsed.isLiveStream;
+      setActiveSection(parsed.section);
+      setWatchingPlayerOpen(parsed.watching);
+      setIsPlayingLive(parsed.isLiveStream);
+
+      if (parsed.watching && parsed.watchId) {
+        const match = videosRef.current.find((v) => (v.youtube_id || v.id) === parsed.watchId);
+        setActiveVideo(match || buildFallbackVideoItem(parsed.watchId));
+      }
+
+      commitRoute(
+        {
+          ...currentRouteRef.current,
+          section: parsed.section,
+          watching: parsed.watching,
+          watchId: parsed.watchId,
+          isLiveStream: parsed.isLiveStream,
+        },
+        'push',
+        'top'
+      );
+    },
+    [commitRoute]
+  );
+
+  useEffect(() => {
+    let cleanup: (() => void) | undefined;
+    let active = true;
+
+    const setup = async () => {
+      const fn = await initBackgroundNotificationSync(
+        navigateFromNotification,
+        (allowed) => {
+          if (active) {
+            setNotificationPromptOpen(!allowed);
+          }
+        }
+      );
+      if (active) {
+        cleanup = fn;
+      } else {
+        fn();
+      }
+    };
+
+    void setup();
+    return () => {
+      active = false;
+      cleanup?.();
+    };
+  }, [navigateFromNotification]);
+
   const fetchArchive = useCallback(async () => {
     try {
       const loaded = await loadFullArchiveBundle('./');
+      lastFetchAtRef.current = Date.now();
       setConfig(loaded.config);
       setLive(loaded.live);
       setVideos(loaded.videos);
       setPosts(loaded.posts);
+      void processFeedSyncNotifications(loaded);
 
       setActiveVideo((prev) => {
         const targetWatchId = desiredWatchIdRef.current;
@@ -299,7 +365,16 @@ export default function App() {
     const interval = setInterval(() => {
       fetchArchive();
     }, 90_000);
-    return () => clearInterval(interval);
+    const onVisibilityChange = () => {
+      if (!document.hidden && Date.now() - lastFetchAtRef.current > 60_000) {
+        fetchArchive();
+      }
+    };
+    document.addEventListener('visibilitychange', onVisibilityChange);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', onVisibilityChange);
+    };
   }, [fetchArchive]);
 
   const handlePlayVideoById = (youtubeId: string) => {
@@ -1023,6 +1098,57 @@ export default function App() {
           );
         })}
       </nav>
+
+      {/* APK Startup Notification Permission Prompt (only shown in Android APK if notifications are disabled) */}
+      {notificationPromptOpen && (
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-labelledby="apk-notif-prompt-title"
+          className="fixed inset-0 z-50 bg-black/65 backdrop-blur-xs flex items-end sm:items-center justify-center p-4"
+        >
+          <div className="w-full max-w-sm rounded-2xl bg-white dark:bg-[#16161B] border border-black/[0.08] dark:border-white/[0.12] p-5 shadow-2xl space-y-4">
+            <div className="flex items-start gap-3">
+              <div className="w-10 h-10 rounded-full bg-[#DC2626]/12 text-[#DC2626] dark:text-[#FF5252] flex items-center justify-center shrink-0">
+                <BellRing className="w-5 h-5" />
+              </div>
+              <div className="min-w-0 flex-1">
+                <h2
+                  id="apk-notif-prompt-title"
+                  className="font-display text-base font-bold text-[#0F0F12] dark:text-[#F3F3F6]"
+                >
+                  Allow Notifications
+                </h2>
+                <p className="mt-1 text-xs sm:text-[13px] text-[#606068] dark:text-[#9A9AA6] leading-relaxed">
+                  Notifications are currently turned off. Allow notifications to receive instant alerts when Azadari Kopaganj goes Live or adds new videos and community posts.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center justify-end gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => setNotificationPromptOpen(false)}
+                className="px-4 py-2 rounded-full text-xs font-semibold text-[#606068] dark:text-[#9A9AA6] hover:bg-black/[0.05] dark:hover:bg-white/[0.08] transition-colors cursor-pointer"
+              >
+                Not now
+              </button>
+              <button
+                type="button"
+                onClick={async () => {
+                  const granted = await promptToAllowNativeNotifications();
+                  if (granted) {
+                    setNotificationPromptOpen(false);
+                  }
+                }}
+                className="px-4 py-2 rounded-full bg-[#DC2626] hover:bg-[#B91C1C] text-white text-xs font-semibold shadow-sm transition-colors cursor-pointer"
+              >
+                Allow Notifications
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

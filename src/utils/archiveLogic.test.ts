@@ -156,6 +156,24 @@ test('detectFeedUpdates identifies new live streams, new video uploads, and new 
   assert.equal(notifications[2].kind, 'post');
   assert.equal(nextSnapshot.isLive, true);
   assert.ok(nextSnapshot.knownVideoIds.includes('NEWVID12345'));
+
+  const deduped = detectFeedUpdates(prevSnapshot, {
+    live: { is_live: true, title: 'Live Majlis', youtube_id: 'SAMELIVE123' },
+    videos: [
+      {
+        id: 'SAMELIVE123',
+        title: 'Live Majlis',
+        youtube_id: 'SAMELIVE123',
+        published: '2026-11-03T10:00:00Z',
+        thumbnail: 'https://img.youtube.com/vi/SAMELIVE123/hqdefault.jpg',
+      },
+    ],
+    posts: [],
+    latestVideoId: 'SAMELIVE123',
+    latestVideoTitle: 'Live Majlis',
+  });
+  assert.equal(deduped.notifications.length, 1);
+  assert.equal(deduped.notifications[0].kind, 'live');
 });
 
 test('filterVideos and filterPosts filter by month, query, and watchlist', () => {

@@ -17,6 +17,7 @@ on:
     paths:
       - "src/**"
       - "public/**"
+      - "android-native/**"
       - "index.html"
       - "package.json"
       - "capacitor.config.ts"

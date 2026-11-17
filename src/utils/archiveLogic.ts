@@ -189,10 +189,12 @@ export function detectFeedUpdates(
   const notifications: FeedNotificationItem[] = [];
 
   // 1. Check live stream transition
+  let emittedLiveNotification = false;
   if (
     current.live.is_live &&
     (!previous.isLive || (current.live.youtube_id && current.live.youtube_id !== previous.liveVideoId))
   ) {
+    emittedLiveNotification = true;
     notifications.push({
       id: `notif_live_${current.live.youtube_id || Date.now()}`,
       kind: 'live',
@@ -211,6 +213,9 @@ export function detectFeedUpdates(
   for (const video of current.videos) {
     const vid = video.youtube_id || video.id;
     if (vid && !prevVideoSet.has(vid)) {
+      if (emittedLiveNotification && current.live.youtube_id && vid === current.live.youtube_id) {
+        continue;
+      }
       notifications.push({
         id: `notif_video_${vid}`,
         kind: 'video',

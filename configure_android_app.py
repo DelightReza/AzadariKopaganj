@@ -133,6 +133,65 @@ def update_adaptive_icons(res_dir: Path) -> None:
                 shutil.copyfile(logo_png, out_dir / name)
 
 
+def update_notification_icon(res_dir: Path) -> None:
+    drawable_dir = res_dir / "drawable"
+    drawable_dir.mkdir(parents=True, exist_ok=True)
+    icon_xml = drawable_dir / "ic_stat_azadari.xml"
+    icon_xml.write_text(
+        """<?xml version="1.0" encoding="utf-8"?>
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="24dp"
+    android:height="24dp"
+    android:viewportWidth="24"
+    android:viewportHeight="24"
+    android:tint="#FFFFFF">
+    <path
+        android:fillColor="#FFFFFFFF"
+        android:pathData="M12,2C6.48,2 2,6.48 2,12s4.48,10 10,10 10,-4.48 10,-10S17.52,2 12,2zM10,16.5v-9l6,4.5 -6,4.5z" />
+</vector>
+""",
+        encoding="utf-8",
+    )
+    print(f"[configure_android_app] Installed monochrome notification icon {icon_xml}")
+
+
+def update_android_manifest(manifest_path: Path) -> None:
+    if not manifest_path.is_file():
+        return
+    text = manifest_path.read_text(encoding="utf-8")
+    required_permissions = [
+        "android.permission.INTERNET",
+        "android.permission.ACCESS_NETWORK_STATE",
+        "android.permission.POST_NOTIFICATIONS",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+    ]
+    missing_tags = []
+    for perm in required_permissions:
+        if perm not in text:
+            missing_tags.append(f'    <uses-permission android:name="{perm}" />')
+
+    if missing_tags and "</manifest>" in text:
+        insertion = "\n".join(missing_tags) + "\n</manifest>"
+        text = text.replace("</manifest>", insertion, 1)
+        manifest_path.write_text(text, encoding="utf-8")
+        print(f"[configure_android_app] Added {len(missing_tags)} permissions to {manifest_path}")
+
+
+def install_background_sync_sources(android_dir: Path) -> None:
+    src_java_dir = Path("android-native/java/com/azadari/kopaganj")
+    if not src_java_dir.is_dir():
+        print(f"[configure_android_app] Warning: {src_java_dir} not found; skipping native worker copy")
+        return
+
+    dest_java_dir = android_dir / "app" / "src" / "main" / "java" / "com" / "azadari" / "kopaganj"
+    dest_java_dir.mkdir(parents=True, exist_ok=True)
+    copied = []
+    for java_file in sorted(src_java_dir.glob("*.java")):
+        shutil.copyfile(java_file, dest_java_dir / java_file.name)
+        copied.append(java_file.name)
+    print(f"[configure_android_app] Installed native Android sync classes into {dest_java_dir}: {', '.join(copied)}")
+
+
 def update_build_gradle(app_build_gradle: Path) -> None:
     if not app_build_gradle.is_file():
         return
@@ -140,10 +199,14 @@ def update_build_gradle(app_build_gradle: Path) -> None:
     version_name = os.environ.get("INPUT_VERSION_NAME", "1.0.0").strip() or "1.0.0"
 
     text = app_build_gradle.read_text(encoding="utf-8")
-    text = re.sub(r'namespace\s+["\'][^"\']+["\']', f'namespace "{PACKAGE_ID}"', text)
+    text = re.sub(r'namespace\s*(?:=\s*)?["\'][^"\']+["\']', f'namespace = "{PACKAGE_ID}"', text)
     text = re.sub(r'applicationId\s+["\'][^"\']+["\']', f'applicationId "{PACKAGE_ID}"', text)
     text = re.sub(r'versionCode\s+\d+', f'versionCode {version_code}', text)
     text = re.sub(r'versionName\s+["\'][^"\']+["\']', f'versionName "{version_name}"', text)
+
+    work_dep = '    implementation "androidx.work:work-runtime:2.9.1"'
+    if "androidx.work:work-runtime" not in text and re.search(r'dependencies\s*\{', text):
+        text = re.sub(r'(dependencies\s*\{)', rf'\1\n{work_dep}', text, count=1)
 
     signing_config_dsl = """    signingConfigs {
         release {
@@ -184,6 +247,9 @@ def main() -> None:
     res_dir = android_dir / "app" / "src" / "main" / "res"
     update_strings_xml(res_dir)
     update_adaptive_icons(res_dir)
+    update_notification_icon(res_dir)
+    update_android_manifest(android_dir / "app" / "src" / "main" / "AndroidManifest.xml")
+    install_background_sync_sources(android_dir)
     update_build_gradle(android_dir / "app" / "build.gradle")
 
 

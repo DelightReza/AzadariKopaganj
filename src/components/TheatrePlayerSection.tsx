@@ -48,7 +48,6 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
 }) => {
   const [theaterWide, setTheaterWide] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
-  const [descExpanded, setDescExpanded] = useState<boolean>(false);
 
   const currentVideoId =
     isPlayingLive && live.youtube_id
@@ -242,39 +241,11 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
               </div>
             </div>
 
-            {/* Description Box */}
-            <div
-              onClick={() => setDescExpanded((prev) => !prev)}
-              className="mt-4 p-4 rounded-2xl bg-white dark:bg-[#141418] border border-black/[0.07] dark:border-white/[0.08] hover:border-black/[0.15] dark:hover:border-white/[0.15] transition-colors text-xs sm:text-sm text-[#0F0F12] dark:text-[#F3F3F6] cursor-pointer"
-            >
-              <div className="flex flex-wrap items-center gap-2 font-semibold tabular-nums">
-                <span>Published {formatArchiveDate(activeVideo.published)}</span>
-                <span aria-hidden="true">·</span>
-                <span className="text-[#606068] dark:text-[#9A9AA6]">{relativeTime}</span>
-              </div>
-
-              <p className="mt-1.5 leading-relaxed text-[#45454D] dark:text-[#C5C5CE]">
-                Official broadcast from <strong>Azadari Kopaganj</strong> (Kopaganj, Mau). Watch recorded Majlis, Nauha, Jashn, Qaseeda, and live streams anytime.
-              </p>
-
-              {descExpanded && (
-                <div className="mt-3 pt-3 border-t border-black/[0.07] dark:border-white/[0.08] space-y-1 text-xs text-[#606068] dark:text-[#9A9AA6]">
-                  <p>Channel: {config.channel_name}</p>
-                  <p className="font-mono">Video ID: {currentVideoId}</p>
-                  <p className="truncate">Direct Watch Link: {watchUrl}</p>
-                </div>
-              )}
-
-              <button
-                type="button"
-                onClick={(e) => {
-                  e.stopPropagation();
-                  setDescExpanded((prev) => !prev);
-                }}
-                className="mt-2 font-semibold text-xs text-[#CC0000] dark:text-[#FF5252] cursor-pointer"
-              >
-                {descExpanded ? 'Show less' : 'Show details'}
-              </button>
+            {/* Published Date Bar */}
+            <div className="mt-3.5 px-4 py-2.5 rounded-xl bg-white dark:bg-[#141418] border border-black/[0.07] dark:border-white/[0.08] inline-flex flex-wrap items-center gap-2 text-xs sm:text-sm font-medium text-[#0F0F12] dark:text-[#F3F3F6] tabular-nums">
+              <span>Published {formatArchiveDate(activeVideo.published)}</span>
+              <span aria-hidden="true" className="text-[#606068] dark:text-[#9A9AA6]">·</span>
+              <span className="text-[#606068] dark:text-[#9A9AA6]">{relativeTime}</span>
             </div>
           </div>
 

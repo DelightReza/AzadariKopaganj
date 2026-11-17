@@ -404,32 +404,41 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     };
   }, [started, youtubeId, mediaUrl, syncAvailableQualities]);
 
-  const handleSkipAd = useCallback(() => {
-    const p = ytPlayerRef.current;
-    if (!p) return;
-    try {
-      const activeVidId = p.getVideoData?.()?.video_id;
-      const adDur = p.getDuration?.() ?? 0;
-      // Only seek to the end of the ad when YouTube exposes a separate skippable ad stream duration.
-      // Never call loadVideoById() during an ad, as YouTube restarts non-skippable ads from 0:00 on reload.
-      if (activeVidId && activeVidId !== youtubeId && Number.isFinite(adDur) && adDur > 0) {
-        p.seekTo(adDur, true);
+  const handleSkipAd = useCallback(
+    (allowReloadFallback = false) => {
+      const p = ytPlayerRef.current;
+      if (!p) return;
+      try {
+        const activeVidId = p.getVideoData?.()?.video_id;
+        const adDur = p.getDuration?.() ?? 0;
+        if (activeVidId && activeVidId !== youtubeId && Number.isFinite(adDur) && adDur > 0) {
+          p.seekTo(adDur, true);
+        } else if (allowReloadFallback) {
+          // Manual user-initiated fallback when YouTube locks seekTo on a long skippable music/video ad
+          const resumeAt = Math.max(0, Math.floor(lastMainTimeRef.current));
+          adStartWallTimeRef.current = Date.now();
+          p.loadVideoById({
+            videoId: youtubeId,
+            startSeconds: resumeAt,
+          });
+        }
+        if (!isMutedRef.current) {
+          p.unMute();
+        }
+        p.setPlaybackRate(playbackRateRef.current);
         setSkipFeedback('Ad Skipped');
         window.setTimeout(() => setSkipFeedback(null), 1100);
+      } catch {
+        // ignore
       }
-      if (!isMutedRef.current) {
-        p.unMute();
-      }
-      p.setPlaybackRate(playbackRateRef.current);
-    } catch {
-      // ignore
-    }
-  }, [youtubeId]);
+    },
+    [youtubeId]
+  );
 
-  // Poll playback progress & detect/auto-skip skippable ads after 5 seconds
+  // Poll playback progress & detect multi-ad pods (e.g. non-skippable Ad 1 followed by skippable song Ad 2)
   useEffect(() => {
     if (!started || mediaUrl) return;
-    const AUTO_SKIP_AFTER_SECONDS = 5;
+    const SKIP_UNLOCK_SECONDS = 5;
 
     const timer = window.setInterval(() => {
       const p = ytPlayerRef.current;
@@ -441,47 +450,51 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         const dur = p.getDuration?.() ?? 0;
 
         const readyElapsedMs = ytReadyAtRef.current ? Date.now() - ytReadyAtRef.current : 0;
-        // Skippable ad stream: YouTube exposes a distinct ad video_id and positive ad duration
-        const isSkippableAdStream = Boolean(
-          activeVidId && activeVidId !== youtubeId && Number.isFinite(dur) && dur > 0
-        );
-        // Non-skippable pre-roll ad: YouTube keeps playerState at -1 (UNSTARTED) until the short ad finishes
-        const isNonSkippablePreRoll =
-          !isSkippableAdStream &&
+        // 1. Distinct ad video_id reported by YouTube IFrame API
+        const isDistinctAdStream = Boolean(activeVidId && activeVidId !== youtubeId);
+        // 2. Pre-roll ad pod (covers both Ad 1 non-skippable bumper AND Ad 2 long music-video ads where main video cur stays 0)
+        const isPreRollAdPod =
+          !isDistinctAdStream &&
           !userPausedRef.current &&
           !isEnded &&
-          readyElapsedMs > 900 &&
-          (playerState === -1 || (cur === 0 && dur === 0));
+          readyElapsedMs > 450 &&
+          (playerState === -1 ||
+            (adStartWallTimeRef.current !== null &&
+              cur < 0.15 &&
+              lastMainTimeRef.current < 0.15 &&
+              playerState !== 2));
 
-        const adDetected = isSkippableAdStream || isNonSkippablePreRoll;
+        const adDetected = isDistinctAdStream || isPreRollAdPod;
         setIsAdPlaying(adDetected);
 
         if (adDetected) {
-          // Ensure poster shield is lifted so ad visuals are always visible
+          // Ensure poster shield is lifted so ad visuals and YouTube's native Skip button are visible
           setHasPlayedOnce(true);
           setIsPlaying(true);
           setIsBuffering(false);
 
-          if (isSkippableAdStream && activeVidId) {
-            if (adStartWallTimeRef.current === null) {
-              adStartWallTimeRef.current = Date.now();
-            }
-            const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
-            const elapsedAdSec =
-              Number.isFinite(cur) && cur > 0 ? Math.max(cur, wallElapsed) : wallElapsed;
-            const remaining = Math.max(0, Math.ceil(AUTO_SKIP_AFTER_SECONDS - elapsedAdSec));
-            setAdSkipCountdown(remaining);
+          if (adStartWallTimeRef.current === null) {
+            adStartWallTimeRef.current = Date.now();
+          }
+          const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
+          const elapsedAdSec =
+            isDistinctAdStream && Number.isFinite(cur) && cur > 0
+              ? Math.max(cur, wallElapsed)
+              : wallElapsed;
+          const remaining = Math.max(0, Math.ceil(SKIP_UNLOCK_SECONDS - elapsedAdSec));
+          setAdSkipCountdown(remaining);
 
-            if (
-              elapsedAdSec >= AUTO_SKIP_AFTER_SECONDS &&
-              autoSkipAttemptedForAdRef.current !== activeVidId
-            ) {
-              autoSkipAttemptedForAdRef.current = activeVidId;
-              handleSkipAd();
-            }
-          } else {
-            // Non-skippable ad: mark countdown as -1 so UI displays non-skippable status without reloading
-            setAdSkipCountdown(-1);
+          // Only auto-seek if YouTube exposes a separate ad video_id and positive ad duration
+          if (
+            isDistinctAdStream &&
+            activeVidId &&
+            Number.isFinite(dur) &&
+            dur > 0 &&
+            elapsedAdSec >= SKIP_UNLOCK_SECONDS &&
+            autoSkipAttemptedForAdRef.current !== activeVidId
+          ) {
+            autoSkipAttemptedForAdRef.current = activeVidId;
+            handleSkipAd(false);
           }
           return;
         }
@@ -491,7 +504,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         const frac = p.getVideoLoadedFraction?.() ?? 0;
         if (Number.isFinite(cur) && cur >= 0) {
           setCurrentTime(cur);
-          if (cur > 0) {
+          if (cur >= 0.15) {
             lastMainTimeRef.current = cur;
           }
         }
@@ -916,49 +929,55 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         />
       )}
 
-      {/* 1B. Headless Video Playback Frame (300% vertical overscan pushes YouTube's top title bar & bottom watermark completely outside overflow-hidden on both 9:16 Shorts and 16:9 Videos) */}
+      {/* 1B. Video Playback Frame (100% interactive frame during ads so YouTube's native 'Sponsored' & 'Skip' button are visible/clickable; 300% vertical overscan during main video) */}
       {started && !mediaUrl && (
         <div
           ref={ytHostRef}
           aria-hidden="true"
-          className="absolute inset-x-0 -top-[100%] w-full h-[300%] pointer-events-none"
+          className={
+            isAdPlaying
+              ? 'absolute inset-0 w-full h-full z-20 pointer-events-auto'
+              : 'absolute inset-x-0 -top-[100%] w-full h-[300%] pointer-events-none'
+          }
         />
       )}
 
       {/* 2. Poster / Pre-Play Shield / Paused / Ended Backdrop Overlay (Covers YouTube startup UI until first playing frame) */}
-      {(!started || !hasPlayedOnce || (!isPlaying && !isBuffering) || isEnded) && !playerError && (
-        <div
-          onClick={() => {
-            if (speedMenuOpen || qualityMenuOpen) {
-              setSpeedMenuOpen(false);
-              setQualityMenuOpen(false);
-            }
-            scheduleHideHud();
-          }}
-          className="absolute inset-0 z-10"
-        >
-          {(!started || !hasPlayedOnce || isEnded) && (
-            <div className="absolute inset-0">
-              <ResilientThumbnail
-                src={resolvedThumb}
-                alt={title}
-                className="w-full h-full"
-              />
-            </div>
-          )}
-
+      {(!started || !hasPlayedOnce || (!isPlaying && !isBuffering) || isEnded) &&
+        !isAdPlaying &&
+        !playerError && (
           <div
-            className={`absolute inset-0 transition-opacity ${
-              !started || !hasPlayedOnce || isEnded
-                ? 'bg-gradient-to-t from-black/80 via-black/30 to-black/35'
-                : 'bg-black/65 backdrop-blur-[3px]'
-            }`}
-          />
-        </div>
-      )}
+            onClick={() => {
+              if (speedMenuOpen || qualityMenuOpen) {
+                setSpeedMenuOpen(false);
+                setQualityMenuOpen(false);
+              }
+              scheduleHideHud();
+            }}
+            className="absolute inset-0 z-10"
+          >
+            {(!started || !hasPlayedOnce || isEnded) && (
+              <div className="absolute inset-0">
+                <ResilientThumbnail
+                  src={resolvedThumb}
+                  alt={title}
+                  className="w-full h-full"
+                />
+              </div>
+            )}
 
-      {/* 3. Active HUD Surface (Clicking anywhere wakes HUD & closes menus without pausing) */}
-      {started && (isPlaying || isBuffering) && !playerError && (
+            <div
+              className={`absolute inset-0 transition-opacity ${
+                !started || !hasPlayedOnce || isEnded
+                  ? 'bg-gradient-to-t from-black/80 via-black/30 to-black/35'
+                  : 'bg-black/65 backdrop-blur-[3px]'
+              }`}
+            />
+          </div>
+        )}
+
+      {/* 3. Active HUD Surface (Clicking anywhere wakes HUD & closes menus without blocking ad controls) */}
+      {started && !isAdPlaying && (isPlaying || isBuffering) && !playerError && (
         <div
           onClick={() => {
             if (speedMenuOpen || qualityMenuOpen) {
@@ -977,7 +996,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       )}
 
       {/* Center Play / Pause / Replay Button (Sole Play/Pause control in player UI) */}
-      {!isBuffering && !playerError && (
+      {!isBuffering && !isAdPlaying && !playerError && (
         <div
           className={`pointer-events-none absolute inset-0 pb-10 sm:pb-8 z-30 flex items-center justify-center transition-opacity duration-200 ${
             hudVisible || !isPlaying || !started || isScrubbing
@@ -1012,7 +1031,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       )}
 
       {/* 4. Buffering & Error States */}
-      {isBuffering && !playerError && (
+      {isBuffering && !isAdPlaying && !playerError && (
         <div className="pointer-events-none absolute inset-0 pb-10 sm:pb-8 z-20 flex items-center justify-center bg-black/40">
           <div className="w-12 h-12 rounded-full bg-black/75 border border-white/15 flex items-center justify-center">
             <Loader2 className="w-6 h-6 text-white animate-spin" />
@@ -1021,36 +1040,60 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       )}
 
       {skipFeedback && (
-        <div className="pointer-events-none absolute inset-0 pb-10 sm:pb-8 z-20 flex items-center justify-center">
+        <div className="pointer-events-none absolute inset-0 pb-10 sm:pb-8 z-30 flex items-center justify-center">
           <span className="px-4 py-1.5 rounded-full bg-black/80 text-white text-xs font-bold border border-white/20">
             {skipFeedback}
           </span>
         </div>
       )}
 
-      {/* Ad Status Pill (5s auto-skip for skippable ads; natural completion for non-skippable ads) */}
+      {/* Top Ad Status & Control Bar (Positioned at top so YouTube's bottom-right native Skip button is 100% unobstructed) */}
       {isAdPlaying && !playerError && (
-        <div className="absolute bottom-20 right-3 sm:right-4 z-30 flex items-center gap-2">
-          <span className="px-3 py-1.5 rounded-full bg-black/85 backdrop-blur-md text-white text-[11px] font-semibold border border-white/20 tabular-nums shadow-lg">
-            {adSkipCountdown < 0
-              ? 'Ad · Video starts after ad'
-              : adSkipCountdown > 0
-                ? `Ad · Auto-skipping in ${adSkipCountdown}s`
-                : 'Skipping ad...'}
+        <div className="pointer-events-none absolute top-2.5 inset-x-2.5 sm:inset-x-3.5 z-30 flex items-center justify-between gap-2">
+          <span className="px-2.5 sm:px-3 py-1 rounded-full bg-black/85 backdrop-blur-md text-amber-300 text-[10px] sm:text-[11px] font-semibold border border-amber-400/30 shadow-lg truncate">
+            AD PLAYING · Your selected video starts after ad
           </span>
-          {adSkipCountdown >= 0 && (
+          <div className="pointer-events-auto flex items-center gap-1.5 shrink-0">
             <button
               type="button"
               onClick={(e) => {
                 e.stopPropagation();
-                handleSkipAd();
+                handleToggleMute();
               }}
-              className="px-3.5 py-1.5 rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white text-xs font-bold shadow-2xl ring-1 ring-white/30 flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
+              aria-label={isMuted || volume === 0 ? 'Unmute ad' : 'Mute ad'}
+              className="px-2.5 py-1 rounded-full bg-black/85 hover:bg-black text-white text-[11px] font-semibold border border-white/25 flex items-center gap-1 cursor-pointer shadow-lg"
             >
-              <span>Skip Now</span>
-              <FastForward className="w-3.5 h-3.5 fill-white" />
+              {isMuted || volume === 0 ? (
+                <>
+                  <VolumeX className="w-3.5 h-3.5 text-[#FF4D4D]" />
+                  <span>Unmute</span>
+                </>
+              ) : (
+                <>
+                  <Volume2 className="w-3.5 h-3.5" />
+                  <span>Mute Ad</span>
+                </>
+              )}
             </button>
-          )}
+
+            {adSkipCountdown > 0 ? (
+              <span className="px-2.5 py-1 rounded-full bg-black/85 text-white/90 text-[11px] font-semibold border border-white/20 tabular-nums shadow-lg">
+                Skip in {adSkipCountdown}s
+              </span>
+            ) : (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  handleSkipAd(true);
+                }}
+                className="px-3 py-1 rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white text-[11px] sm:text-xs font-bold shadow-2xl ring-1 ring-white/30 flex items-center gap-1 cursor-pointer transition-transform hover:scale-105"
+              >
+                <span>Skip to Video</span>
+                <FastForward className="w-3.5 h-3.5 fill-white" />
+              </button>
+            )}
+          </div>
         </div>
       )}
 
@@ -1101,11 +1144,11 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* 5. Custom Inbuilt Control Bar (3-Row Layout: Bar -> Time -> Other) */}
+      {/* 5. Custom Inbuilt Control Bar (3-Row Layout: Bar -> Time -> Other; hidden during ads so bottom-right native Skip button stays clear) */}
       <div
         onClick={(e) => e.stopPropagation()}
         className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/75 to-transparent pt-3 sm:pt-5 pb-1.5 sm:pb-2.5 px-3 sm:px-4 transition-opacity duration-200 ${
-          hudVisible || !isPlaying || !started || isScrubbing
+          !isAdPlaying && (hudVisible || !isPlaying || !started || isScrubbing)
             ? 'opacity-100'
             : 'opacity-0 pointer-events-none'
         }`}

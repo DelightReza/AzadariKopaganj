@@ -408,35 +408,25 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     const p = ytPlayerRef.current;
     if (!p) return;
     try {
-      // Seeking to >=1s on loadVideoById forces YouTube's IFrame Player to bypass the pre-roll/mid-roll ad slot and jump straight into the main video stream
-      const resumeAt = isLive ? 0 : Math.max(1, Math.floor(lastMainTimeRef.current || 1));
-      p.loadVideoById({
-        videoId: youtubeId,
-        startSeconds: resumeAt,
-        ...(selectedQualityRef.current !== 'auto'
-          ? { suggestedQuality: selectedQualityRef.current }
-          : {}),
-      });
-      p.playVideo();
+      const activeVidId = p.getVideoData?.()?.video_id;
+      const adDur = p.getDuration?.() ?? 0;
+      // Only seek to the end of the ad when YouTube exposes a separate skippable ad stream duration.
+      // Never call loadVideoById() during an ad, as YouTube restarts non-skippable ads from 0:00 on reload.
+      if (activeVidId && activeVidId !== youtubeId && Number.isFinite(adDur) && adDur > 0) {
+        p.seekTo(adDur, true);
+        setSkipFeedback('Ad Skipped');
+        window.setTimeout(() => setSkipFeedback(null), 1100);
+      }
       if (!isMutedRef.current) {
         p.unMute();
       }
       p.setPlaybackRate(playbackRateRef.current);
-
-      setHasPlayedOnce(true);
-      setIsPlaying(true);
-      setIsBuffering(false);
-      setIsAdPlaying(false);
-      adStartWallTimeRef.current = null;
-      ytReadyAtRef.current = Date.now();
-      setSkipFeedback('Ad Skipped');
-      window.setTimeout(() => setSkipFeedback(null), 1100);
     } catch {
       // ignore
     }
-  }, [youtubeId, isLive]);
+  }, [youtubeId]);
 
-  // Poll playback progress & detect/auto-skip ads after 5 seconds
+  // Poll playback progress & detect/auto-skip skippable ads after 5 seconds
   useEffect(() => {
     if (!started || mediaUrl) return;
     const AUTO_SKIP_AFTER_SECONDS = 5;
@@ -450,16 +440,20 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         const cur = p.getCurrentTime?.() ?? 0;
         const dur = p.getDuration?.() ?? 0;
 
-        // Detect ad either by mismatched video_id OR by YT staying in UNSTARTED (-1) / t=0 while playing a pre-roll ad after onReady
         const readyElapsedMs = ytReadyAtRef.current ? Date.now() - ytReadyAtRef.current : 0;
-        const isVideoIdMismatch = Boolean(activeVidId && activeVidId !== youtubeId);
-        const isPreRollUnstartedAd =
+        // Skippable ad stream: YouTube exposes a distinct ad video_id and positive ad duration
+        const isSkippableAdStream = Boolean(
+          activeVidId && activeVidId !== youtubeId && Number.isFinite(dur) && dur > 0
+        );
+        // Non-skippable pre-roll ad: YouTube keeps playerState at -1 (UNSTARTED) until the short ad finishes
+        const isNonSkippablePreRoll =
+          !isSkippableAdStream &&
           !userPausedRef.current &&
           !isEnded &&
           readyElapsedMs > 900 &&
           (playerState === -1 || (cur === 0 && dur === 0));
 
-        const adDetected = isVideoIdMismatch || isPreRollUnstartedAd;
+        const adDetected = isSkippableAdStream || isNonSkippablePreRoll;
         setIsAdPlaying(adDetected);
 
         if (adDetected) {
@@ -468,24 +462,26 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           setIsPlaying(true);
           setIsBuffering(false);
 
-          if (adStartWallTimeRef.current === null) {
-            adStartWallTimeRef.current = Date.now();
-          }
-          const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
-          const elapsedAdSec =
-            isVideoIdMismatch && Number.isFinite(cur) && cur > 0
-              ? Math.max(cur, wallElapsed)
-              : wallElapsed;
-          const remaining = Math.max(0, Math.ceil(AUTO_SKIP_AFTER_SECONDS - elapsedAdSec));
-          setAdSkipCountdown(remaining);
+          if (isSkippableAdStream && activeVidId) {
+            if (adStartWallTimeRef.current === null) {
+              adStartWallTimeRef.current = Date.now();
+            }
+            const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
+            const elapsedAdSec =
+              Number.isFinite(cur) && cur > 0 ? Math.max(cur, wallElapsed) : wallElapsed;
+            const remaining = Math.max(0, Math.ceil(AUTO_SKIP_AFTER_SECONDS - elapsedAdSec));
+            setAdSkipCountdown(remaining);
 
-          const adKey = activeVidId && activeVidId !== youtubeId ? activeVidId : `preroll-${ytReadyAtRef.current}`;
-          if (
-            elapsedAdSec >= AUTO_SKIP_AFTER_SECONDS &&
-            autoSkipAttemptedForAdRef.current !== adKey
-          ) {
-            autoSkipAttemptedForAdRef.current = adKey;
-            handleSkipAd();
+            if (
+              elapsedAdSec >= AUTO_SKIP_AFTER_SECONDS &&
+              autoSkipAttemptedForAdRef.current !== activeVidId
+            ) {
+              autoSkipAttemptedForAdRef.current = activeVidId;
+              handleSkipAd();
+            }
+          } else {
+            // Non-skippable ad: mark countdown as -1 so UI displays non-skippable status without reloading
+            setAdSkipCountdown(-1);
           }
           return;
         }
@@ -1032,25 +1028,29 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         </div>
       )}
 
-      {/* Ad Countdown & Auto-Skip Pill (Plays ad for 5s then skips automatically) */}
+      {/* Ad Status Pill (5s auto-skip for skippable ads; natural completion for non-skippable ads) */}
       {isAdPlaying && !playerError && (
         <div className="absolute bottom-20 right-3 sm:right-4 z-30 flex items-center gap-2">
           <span className="px-3 py-1.5 rounded-full bg-black/85 backdrop-blur-md text-white text-[11px] font-semibold border border-white/20 tabular-nums shadow-lg">
-            {adSkipCountdown > 0
-              ? `Ad · Auto-skipping in ${adSkipCountdown}s`
-              : 'Skipping ad...'}
+            {adSkipCountdown < 0
+              ? 'Ad · Video starts after ad'
+              : adSkipCountdown > 0
+                ? `Ad · Auto-skipping in ${adSkipCountdown}s`
+                : 'Skipping ad...'}
           </span>
-          <button
-            type="button"
-            onClick={(e) => {
-              e.stopPropagation();
-              handleSkipAd();
-            }}
-            className="px-3.5 py-1.5 rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white text-xs font-bold shadow-2xl ring-1 ring-white/30 flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
-          >
-            <span>Skip Now</span>
-            <FastForward className="w-3.5 h-3.5 fill-white" />
-          </button>
+          {adSkipCountdown >= 0 && (
+            <button
+              type="button"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleSkipAd();
+              }}
+              className="px-3.5 py-1.5 rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white text-xs font-bold shadow-2xl ring-1 ring-white/30 flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
+            >
+              <span>Skip Now</span>
+              <FastForward className="w-3.5 h-3.5 fill-white" />
+            </button>
+          )}
         </div>
       )}
 

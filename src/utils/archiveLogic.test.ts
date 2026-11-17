@@ -11,6 +11,12 @@ import {
   filterVideos,
   filterPosts,
   matchesVideoTopic,
+  extractVideoViewCount,
+  formatCompactViewCount,
+  getPopularVideos,
+  isShortVideo,
+  getPostImages,
+  toUncroppedPostImageUrl,
 } from './archiveLogic';
 import { formatPlayerTime, formatQualityLabel } from './youtubePlayerApi';
 
@@ -246,4 +252,83 @@ test('formatQualityLabel formats YouTube quality levels cleanly', () => {
   assert.equal(formatQualityLabel('medium'), '360p');
   assert.equal(formatQualityLabel('small'), '240p');
   assert.equal(formatQualityLabel('tiny'), '144p');
+});
+
+test('extractVideoViewCount, formatCompactViewCount, and getPopularVideos sort by popularity', () => {
+  assert.equal(
+    extractVideoViewCount({ title: 'Karbala Ho Gayi Tayyar, 34 thousand views - play Short' }),
+    34000
+  );
+  assert.equal(
+    extractVideoViewCount({ title: 'Bik Nahi Sakte Husaini, 9.6 thousand views - play Short' }),
+    9600
+  );
+  assert.equal(extractVideoViewCount({ title: 'Majlis e Aza Kopaganj', views: 18000 }), 18000);
+  assert.equal(extractVideoViewCount({ title: 'Majlis e Aza Kopaganj' }), 0);
+
+  assert.equal(formatCompactViewCount(34000), '34K views');
+  assert.equal(formatCompactViewCount(9600), '9.6K views');
+  assert.equal(formatCompactViewCount(0), '');
+
+  const ranked = getPopularVideos(
+    [
+      { id: '1', youtube_id: '1', title: 'Short High Views', published: '2026-11-15T00:00:00Z', thumbnail: '', views: 34000, is_short: true },
+      { id: '2', youtube_id: '2', title: 'Full Video A', published: '2025-07-01T00:00:00Z', thumbnail: '', views: 12000 },
+      { id: '3', youtube_id: '3', title: 'Full Video B', published: '2023-07-18T00:00:00Z', thumbnail: '', views: 18000 },
+    ],
+    2
+  );
+  assert.deepEqual(
+    ranked.map((v) => v.id),
+    ['3', '2']
+  );
+
+  const orderedByConfig = getPopularVideos(
+    [
+      { id: '2', youtube_id: '2', title: 'Full Video A', published: '2025-07-01T00:00:00Z', thumbnail: '', views: 12000 },
+      { id: '3', youtube_id: '3', title: 'Full Video B', published: '2023-07-18T00:00:00Z', thumbnail: '', views: 18000 },
+    ],
+    2,
+    ['2', '3']
+  );
+  assert.deepEqual(
+    orderedByConfig.map((v) => v.id),
+    ['2', '3']
+  );
+});
+
+test('isShortVideo detects vertical Shorts via is_short flag or title markers', () => {
+  assert.equal(isShortVideo({ title: 'Karbala Ho Gayi Tayyar', is_short: true }), true);
+  assert.equal(isShortVideo({ title: 'Ziyarat Roza e Hussain #shorts' }), true);
+  assert.equal(isShortVideo({ title: 'Clip, 1.2K views - play Short' }), true);
+  assert.equal(isShortVideo({ title: 'Full Majlis Kopaganj 2026', is_short: false }), false);
+});
+
+test('getPostImages and toUncroppedPostImageUrl strip 1:1 fcrop64 square crop params and deduplicate URLs', () => {
+  assert.equal(
+    toUncroppedPostImageUrl(
+      'https://yt3.ggpht.com/mwQt8euHJW5_XA084lHu0cUutLuWBw876YiU3uD5Lqkh_MiWs2kiRLCR6gb3uNu66QH0UErDDs3N8g=s1706-c-fcrop64=1,000012afffffbd48-rw-nd-v1'
+    ),
+    'https://yt3.ggpht.com/mwQt8euHJW5_XA084lHu0cUutLuWBw876YiU3uD5Lqkh_MiWs2kiRLCR6gb3uNu66QH0UErDDs3N8g=s0'
+  );
+
+  assert.deepEqual(
+    getPostImages({
+      image_url:
+        'https://yt3.ggpht.com/poster1=s1706-c-fcrop64=1,000012afffffbd48-rw-nd-v1',
+      images: [
+        '//yt3.ggpht.com/poster1=s1706-c-fcrop64=1,000012afffffbd48-rw-nd-v1',
+        'https://yt3.ggpht.com/poster2=s3120-c-fcrop64=1,20000000dfffffff-rw-nd-v1',
+        '  ',
+        'https://yt3.ggpht.com/poster3=s1080-c-fcrop64=1,00001bd2ffffdbd2-rw-nd-v1',
+      ],
+    }),
+    [
+      'https://yt3.ggpht.com/poster1=s0',
+      'https://yt3.ggpht.com/poster2=s0',
+      'https://yt3.ggpht.com/poster3=s0',
+    ]
+  );
+
+  assert.deepEqual(getPostImages({ image_url: '' }), []);
 });

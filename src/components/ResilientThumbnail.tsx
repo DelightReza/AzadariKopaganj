@@ -10,6 +10,7 @@ interface ResilientThumbnailProps {
   youtubeId?: string;
   fallbackIndex?: number;
   className?: string;
+  fit?: 'cover' | 'contain' | 'natural';
 }
 
 export const ResilientThumbnail: React.FC<ResilientThumbnailProps> = ({
@@ -17,6 +18,7 @@ export const ResilientThumbnail: React.FC<ResilientThumbnailProps> = ({
   alt,
   fallbackIndex = 0,
   className = '',
+  fit = 'cover',
 }) => {
   const fallbackImage = fallbackIndex % 2 === 1 ? majlisHallImg : heroHeritageImg;
   const [currentSrc, setCurrentSrc] = useState<string>(src || fallbackImage);
@@ -42,7 +44,13 @@ export const ResilientThumbnail: React.FC<ResilientThumbnailProps> = ({
         referrerPolicy="no-referrer"
         loading="lazy"
         onError={handleError}
-        className="w-full h-full object-cover transition-transform duration-200 group-hover:scale-[1.02]"
+        className={
+          fit === 'natural'
+            ? 'w-full h-auto max-h-[680px] object-contain mx-auto block'
+            : `w-full h-full ${
+                fit === 'contain' ? 'object-contain' : 'object-cover'
+              } transition-transform duration-200 group-hover:scale-[1.02]`
+        }
       />
     </div>
   );

@@ -37,11 +37,13 @@ export interface YTPlayerInstance {
   setPlaybackRate: (rate: number) => void;
   getPlaybackQuality?: () => string;
   setPlaybackQuality?: (suggestedQuality: string) => void;
+  setPlaybackQualityRange?: (min: string, max?: string) => void;
   getAvailableQualityLevels?: () => string[];
   getCurrentTime: () => number;
   getDuration: () => number;
   getVideoLoadedFraction: () => number;
   getPlayerState: () => number;
+  getVideoData?: () => { video_id?: string; title?: string; author?: string };
   loadVideoById: (
     videoOrOptions:
       | string

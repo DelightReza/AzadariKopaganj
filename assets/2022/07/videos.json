@@ -5,6 +5,7 @@
     "youtube_id": "fduyvSVzh-4",
     "published": "2022-07-23T11:30:15Z",
     "thumbnail": "https://img.youtube.com/vi/fduyvSVzh-4/hqdefault.jpg",
+    "views": 185,
     "is_stream": true
   },
   {
@@ -13,6 +14,7 @@
     "youtube_id": "9MTc02Sw74c",
     "published": "2022-07-23T11:26:29Z",
     "thumbnail": "https://img.youtube.com/vi/9MTc02Sw74c/hqdefault.jpg",
+    "views": 112,
     "is_stream": true
   },
   {
@@ -21,6 +23,7 @@
     "youtube_id": "osSZPigKINY",
     "published": "2022-07-22T11:22:43Z",
     "thumbnail": "https://img.youtube.com/vi/osSZPigKINY/hqdefault.jpg",
+    "views": 256,
     "is_stream": true
   },
   {
@@ -28,7 +31,8 @@
     "title": "Mefil Eid e Ghadeer Husaini Basti Kopaganj | Mohammad Raza",
     "youtube_id": "sc_UfiHkkrM",
     "published": "2022-07-18T17:41:15Z",
-    "thumbnail": "https://img.youtube.com/vi/sc_UfiHkkrM/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/sc_UfiHkkrM/hqdefault.jpg",
+    "views": 269
   },
   {
     "id": "De7hTvoKKeU",
@@ -36,6 +40,7 @@
     "youtube_id": "De7hTvoKKeU",
     "published": "2022-07-18T11:18:56Z",
     "thumbnail": "https://img.youtube.com/vi/De7hTvoKKeU/hqdefault.jpg",
+    "views": 248,
     "is_stream": true
   },
   {
@@ -44,6 +49,7 @@
     "youtube_id": "8I-RZ00JalQ",
     "published": "2022-07-17T11:15:10Z",
     "thumbnail": "https://img.youtube.com/vi/8I-RZ00JalQ/hqdefault.jpg",
+    "views": 392,
     "is_stream": true
   },
   {
@@ -52,6 +58,7 @@
     "youtube_id": "r3k5X88CaLg",
     "published": "2022-07-17T11:11:24Z",
     "thumbnail": "https://img.youtube.com/vi/r3k5X88CaLg/hqdefault.jpg",
+    "views": 389,
     "is_stream": true
   },
   {
@@ -60,6 +67,7 @@
     "youtube_id": "JpQn5s1BRps",
     "published": "2022-07-13T11:07:37Z",
     "thumbnail": "https://img.youtube.com/vi/JpQn5s1BRps/hqdefault.jpg",
+    "views": 1700,
     "is_stream": true
   },
   {
@@ -68,6 +76,7 @@
     "youtube_id": "8iGVADpxB9o",
     "published": "2022-07-13T11:03:51Z",
     "thumbnail": "https://img.youtube.com/vi/8iGVADpxB9o/hqdefault.jpg",
+    "views": 2700,
     "is_stream": true
   }
 ]

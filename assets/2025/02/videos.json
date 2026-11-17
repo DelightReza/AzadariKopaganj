@@ -5,14 +5,17 @@
     "youtube_id": "KS4EGs-fXLc",
     "published": "2025-02-23T17:58:46Z",
     "thumbnail": "https://img.youtube.com/vi/KS4EGs-fXLc/hqdefault.jpg",
+    "views": 5400,
     "is_stream": true
   },
   {
     "id": "FHUNZQOg_MI",
-    "title": "Digital Invitation | Grand Jashn E Tajdar E Wafa | All India Tarhi Bazm E Moqaseda Kopaganj Mau 2025, 1.5 thousand views - play Short",
+    "title": "Digital Invitation | Grand Jashn E Tajdar E Wafa | All India Tarhi Bazm E Moqaseda Kopaganj Mau 2025",
     "youtube_id": "FHUNZQOg_MI",
     "published": "2025-02-20T03:35:00Z",
-    "thumbnail": "https://img.youtube.com/vi/FHUNZQOg_MI/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/FHUNZQOg_MI/hqdefault.jpg",
+    "views": 1500,
+    "is_short": true
   },
   {
     "id": "v0_pgHXepiQ",
@@ -20,6 +23,7 @@
     "youtube_id": "v0_pgHXepiQ",
     "published": "2025-02-19T17:55:00Z",
     "thumbnail": "https://img.youtube.com/vi/v0_pgHXepiQ/hqdefault.jpg",
+    "views": 578,
     "is_stream": true
   },
   {
@@ -28,6 +32,7 @@
     "youtube_id": "bfuek5Kata8",
     "published": "2025-02-14T17:51:13Z",
     "thumbnail": "https://img.youtube.com/vi/bfuek5Kata8/hqdefault.jpg",
+    "views": 1200,
     "is_stream": true
   },
   {
@@ -36,6 +41,7 @@
     "youtube_id": "5r97_vVVAr8",
     "published": "2025-02-06T17:47:27Z",
     "thumbnail": "https://img.youtube.com/vi/5r97_vVVAr8/hqdefault.jpg",
+    "views": 5500,
     "is_stream": true
   },
   {
@@ -44,6 +50,7 @@
     "youtube_id": "cPRRuTlqG8w",
     "published": "2025-02-02T17:43:41Z",
     "thumbnail": "https://img.youtube.com/vi/cPRRuTlqG8w/hqdefault.jpg",
+    "views": 2400,
     "is_stream": true
   }
 ]

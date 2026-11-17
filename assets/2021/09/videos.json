@@ -4,35 +4,40 @@
     "title": "Noha | Rone Wali Bahan Aayi Hai Karbala | 19 Safar 1443H | Anjuman Haidari Regd. Kopaganj Mau",
     "youtube_id": "RYpo66rDzB0",
     "published": "2021-09-28T17:17:13Z",
-    "thumbnail": "https://img.youtube.com/vi/RYpo66rDzB0/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/RYpo66rDzB0/hqdefault.jpg",
+    "views": 1400
   },
   {
     "id": "IaFNOmq6P-4",
     "title": "Noha | Zindaan Mein Uthta Hai Sakeena Ka Janaza |19 Safar 1443H | Anjuman Sajjadia Regd. Kopaganj",
     "youtube_id": "IaFNOmq6P-4",
     "published": "2021-09-28T17:16:04Z",
-    "thumbnail": "https://img.youtube.com/vi/IaFNOmq6P-4/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/IaFNOmq6P-4/hqdefault.jpg",
+    "views": 1100
   },
   {
     "id": "5o2nO3fWcLg",
     "title": "Noha | Baccho'n Ki Yaad Aayi | बच्चों की याद आई | 20 Safar 1443H | Anjuman Sajjadia Regd. Kopaganj",
     "youtube_id": "5o2nO3fWcLg",
     "published": "2021-09-28T17:14:55Z",
-    "thumbnail": "https://img.youtube.com/vi/5o2nO3fWcLg/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/5o2nO3fWcLg/hqdefault.jpg",
+    "views": 3700
   },
   {
     "id": "2rW5qMoiNrk",
     "title": "Noha | Abid (a.s.) Tadapta Rah Gaya | 20 Safar 1443 | Anjuman Imamia Qadeem Regd. Kopaganj Mau |",
     "youtube_id": "2rW5qMoiNrk",
     "published": "2021-09-28T17:13:47Z",
-    "thumbnail": "https://img.youtube.com/vi/2rW5qMoiNrk/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/2rW5qMoiNrk/hqdefault.jpg",
+    "views": 1100
   },
   {
     "id": "l_hl3SGRggM",
     "title": "20 Safar 1443H Kopaganj",
     "youtube_id": "l_hl3SGRggM",
     "published": "2021-09-28T17:12:38Z",
-    "thumbnail": "https://img.youtube.com/vi/l_hl3SGRggM/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/l_hl3SGRggM/hqdefault.jpg",
+    "views": 4000
   },
   {
     "id": "gzp8ErUnMXo",
@@ -40,6 +45,7 @@
     "youtube_id": "gzp8ErUnMXo",
     "published": "2021-09-22T09:03:09Z",
     "thumbnail": "https://img.youtube.com/vi/gzp8ErUnMXo/hqdefault.jpg",
+    "views": 1300,
     "is_stream": true
   },
   {
@@ -47,7 +53,8 @@
     "title": "Noha | Zanjeer Ki Kadiyan Roti Hain | ज़ंजीर की कड़ियां रोती हैं | Anjuman Sajjadiya Kopaganj",
     "youtube_id": "OQR8Kw4ONZo",
     "published": "2021-09-04T17:11:29Z",
-    "thumbnail": "https://img.youtube.com/vi/OQR8Kw4ONZo/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/OQR8Kw4ONZo/hqdefault.jpg",
+    "views": 1100
   },
   {
     "id": "Wv5x3WgVcHs",
@@ -55,6 +62,7 @@
     "youtube_id": "Wv5x3WgVcHs",
     "published": "2021-09-03T08:59:23Z",
     "thumbnail": "https://img.youtube.com/vi/Wv5x3WgVcHs/hqdefault.jpg",
+    "views": 1000,
     "is_stream": true
   }
 ]

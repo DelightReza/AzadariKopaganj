@@ -5,6 +5,7 @@
     "youtube_id": "5YxEa48eRfU",
     "published": "2024-02-27T15:31:40Z",
     "thumbnail": "https://img.youtube.com/vi/5YxEa48eRfU/hqdefault.jpg",
+    "views": 2300,
     "is_stream": true
   },
   {
@@ -13,6 +14,7 @@
     "youtube_id": "EB9pBDRJL4k",
     "published": "2024-02-26T15:27:53Z",
     "thumbnail": "https://img.youtube.com/vi/EB9pBDRJL4k/hqdefault.jpg",
+    "views": 1500,
     "is_stream": true
   },
   {
@@ -21,6 +23,7 @@
     "youtube_id": "3Erm33m8gOs",
     "published": "2024-02-22T15:24:07Z",
     "thumbnail": "https://img.youtube.com/vi/3Erm33m8gOs/hqdefault.jpg",
+    "views": 2500,
     "is_stream": true
   },
   {
@@ -29,6 +32,7 @@
     "youtube_id": "uuWgUb4Wt28",
     "published": "2024-02-21T15:20:21Z",
     "thumbnail": "https://img.youtube.com/vi/uuWgUb4Wt28/hqdefault.jpg",
+    "views": 686,
     "is_stream": true
   },
   {
@@ -36,48 +40,55 @@
     "title": "Nabi (ص) Ke Noor Ki Tanveer Hain Imam Hussain (ع) | Janab Ahmad Raza Rabbani | 3 Shaban Qaseeda 2024",
     "youtube_id": "MToJGRjig88",
     "published": "2024-02-16T21:38:14Z",
-    "thumbnail": "https://img.youtube.com/vi/MToJGRjig88/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/MToJGRjig88/hqdefault.jpg",
+    "views": 184
   },
   {
     "id": "Y6TBncd21og",
     "title": "Naz Farma Hain Ali e Murtaza (ع) Abbas (ع) Par | Maulana Kalbe Abbas Ashhar | 4 Shaban Qaseeda 2024",
     "youtube_id": "Y6TBncd21og",
     "published": "2024-02-14T21:37:05Z",
-    "thumbnail": "https://img.youtube.com/vi/Y6TBncd21og/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/Y6TBncd21og/hqdefault.jpg",
+    "views": 155
   },
   {
     "id": "BeQDUZCKFWo",
     "title": "Ye Teesri Shaban Ke Jalwe | Alhaaj Master Jafer Ali | Jashne Shabbir A.s Kopaganj Mau 2024",
     "youtube_id": "BeQDUZCKFWo",
     "published": "2024-02-13T21:35:57Z",
-    "thumbnail": "https://img.youtube.com/vi/BeQDUZCKFWo/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/BeQDUZCKFWo/hqdefault.jpg",
+    "views": 241
   },
   {
     "id": "IjlmYtKe36Y",
     "title": "Mai Chod Aaya Sare Karbobala Dil | 3 Shaban Special Manqabat Qaseeda 2024 New | Azadari Kopaganj",
     "youtube_id": "IjlmYtKe36Y",
     "published": "2024-02-13T21:34:48Z",
-    "thumbnail": "https://img.youtube.com/vi/IjlmYtKe36Y/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/IjlmYtKe36Y/hqdefault.jpg",
+    "views": 387
   },
   {
     "id": "fZbo7AXzjtE",
     "title": "Banke Shabbir (ع) Shahadat Ka Muqaddar Nikle | Anjuman Haideri Rejisterd Kopaganj | 28 Rajab Ghosi",
     "youtube_id": "fZbo7AXzjtE",
     "published": "2024-02-10T21:33:39Z",
-    "thumbnail": "https://img.youtube.com/vi/fZbo7AXzjtE/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/fZbo7AXzjtE/hqdefault.jpg",
+    "views": 886
   },
   {
     "id": "kNUZLuv6Q5E",
     "title": "Aaj Shabbir (ع) Madine Se Chale Jayenge | Anjuman Haideri Rejisterd Kopaganj Mau | 28 Rajab Ghosi",
     "youtube_id": "kNUZLuv6Q5E",
     "published": "2024-02-09T21:32:31Z",
-    "thumbnail": "https://img.youtube.com/vi/kNUZLuv6Q5E/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/kNUZLuv6Q5E/hqdefault.jpg",
+    "views": 1300
   },
   {
     "id": "bnVp-94x5ew",
     "title": "Bole Shabbir Ki Chutata Hai Madina Amma | Anjuman Haideri Rejisterd Kopaganj | 28 Rajab Ghosi 2024",
     "youtube_id": "bnVp-94x5ew",
     "published": "2024-02-09T21:31:22Z",
-    "thumbnail": "https://img.youtube.com/vi/bnVp-94x5ew/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/bnVp-94x5ew/hqdefault.jpg",
+    "views": 2400
   }
 ]

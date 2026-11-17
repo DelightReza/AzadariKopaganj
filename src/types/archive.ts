@@ -26,6 +26,7 @@ export interface AppConfig {
   post_json_files: string[];
   latest_video_id: string;
   latest_video_title: string;
+  popular_video_ids?: string[];
   is_live: boolean;
   available_months: AvailableMonth[];
 }
@@ -42,7 +43,9 @@ export interface VideoItem {
   youtube_id: string;
   published: string;
   thumbnail: string;
+  views?: number;
   is_stream?: boolean;
+  is_short?: boolean;
   month_key?: string;
   month_label?: string;
 }
@@ -53,6 +56,7 @@ export interface CommunityPost {
   title: string;
   text: string;
   image_url: string;
+  images?: string[];
   link_url: string;
   month_key?: string;
   month_label?: string;
@@ -64,6 +68,7 @@ export interface CommunityPostDraft {
   title: string;
   text: string;
   image_url: string;
+  images?: string[];
   link_url: string;
 }
 

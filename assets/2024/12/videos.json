@@ -5,6 +5,7 @@
     "youtube_id": "UZAkq2rDa7U",
     "published": "2024-12-31T17:32:22Z",
     "thumbnail": "https://img.youtube.com/vi/UZAkq2rDa7U/hqdefault.jpg",
+    "views": 311,
     "is_stream": true
   },
   {
@@ -12,7 +13,9 @@
     "title": "Namahram Se Baat Karna ! #viral #trending #majlis #shorts #azadari #maulanapayamhaiderrizvi #viral",
     "youtube_id": "SLF-OV7dgKE",
     "published": "2024-12-29T03:23:41Z",
-    "thumbnail": "https://img.youtube.com/vi/SLF-OV7dgKE/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/SLF-OV7dgKE/hqdefault.jpg",
+    "views": 688,
+    "is_short": true
   },
   {
     "id": "Mk5kxOsmwa0",
@@ -20,6 +23,7 @@
     "youtube_id": "Mk5kxOsmwa0",
     "published": "2024-12-22T17:28:35Z",
     "thumbnail": "https://img.youtube.com/vi/Mk5kxOsmwa0/hqdefault.jpg",
+    "views": 928,
     "is_stream": true
   },
   {
@@ -27,7 +31,8 @@
     "title": "Qabre Na Mitao Mera Rauza Na Girao | Dr Quasim Husain | Credit @DuaEZehraRecords",
     "youtube_id": "gCz2xleQDK4",
     "published": "2024-12-07T22:21:44Z",
-    "thumbnail": "https://img.youtube.com/vi/gCz2xleQDK4/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/gCz2xleQDK4/hqdefault.jpg",
+    "views": 753
   },
   {
     "id": "8NighyxrGkQ",
@@ -35,6 +40,7 @@
     "youtube_id": "8NighyxrGkQ",
     "published": "2024-12-06T17:24:49Z",
     "thumbnail": "https://img.youtube.com/vi/8NighyxrGkQ/hqdefault.jpg",
+    "views": 749,
     "is_stream": true
   },
   {
@@ -43,6 +49,7 @@
     "youtube_id": "t4MpYPSr-Y8",
     "published": "2024-12-05T17:21:03Z",
     "thumbnail": "https://img.youtube.com/vi/t4MpYPSr-Y8/hqdefault.jpg",
+    "views": 729,
     "is_stream": true
   },
   {
@@ -51,6 +58,7 @@
     "youtube_id": "GjHsicCC2cc",
     "published": "2024-12-05T17:17:16Z",
     "thumbnail": "https://img.youtube.com/vi/GjHsicCC2cc/hqdefault.jpg",
+    "views": 675,
     "is_stream": true
   },
   {
@@ -59,6 +67,7 @@
     "youtube_id": "guZm3LpNYA8",
     "published": "2024-12-05T17:13:30Z",
     "thumbnail": "https://img.youtube.com/vi/guZm3LpNYA8/hqdefault.jpg",
+    "views": 506,
     "is_stream": true
   },
   {
@@ -67,14 +76,17 @@
     "youtube_id": "7T0T6uRkMS4",
     "published": "2024-12-05T17:09:44Z",
     "thumbnail": "https://img.youtube.com/vi/7T0T6uRkMS4/hqdefault.jpg",
+    "views": 560,
     "is_stream": true
   },
   {
     "id": "fg6Xc8AhNwg",
-    "title": "😥 Meri Zahra Hai Meri Nishani | Anjuman Haideri Registered Kopaganj | #ayyamefatima  #shorts #viral, 1.4 thousand views - play Short",
+    "title": "😥 Meri Zahra Hai Meri Nishani | Anjuman Haideri Registered Kopaganj | #ayyamefatima  #shorts #viral",
     "youtube_id": "fg6Xc8AhNwg",
     "published": "2024-12-05T03:19:54Z",
-    "thumbnail": "https://img.youtube.com/vi/fg6Xc8AhNwg/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/fg6Xc8AhNwg/hqdefault.jpg",
+    "views": 1400,
+    "is_short": true
   },
   {
     "id": "aA5NuS_2tXo",
@@ -82,6 +94,7 @@
     "youtube_id": "aA5NuS_2tXo",
     "published": "2024-12-04T17:05:57Z",
     "thumbnail": "https://img.youtube.com/vi/aA5NuS_2tXo/hqdefault.jpg",
+    "views": 1300,
     "is_stream": true
   }
 ]

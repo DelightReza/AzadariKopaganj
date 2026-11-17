@@ -5,6 +5,7 @@
     "youtube_id": "xHCaqXpU9gk",
     "published": "2025-04-10T18:17:37Z",
     "thumbnail": "https://img.youtube.com/vi/xHCaqXpU9gk/hqdefault.jpg",
+    "views": 379,
     "is_stream": true
   },
   {
@@ -13,6 +14,7 @@
     "youtube_id": "ZdsusPaxVL8",
     "published": "2025-04-04T18:13:51Z",
     "thumbnail": "https://img.youtube.com/vi/ZdsusPaxVL8/hqdefault.jpg",
+    "views": 281,
     "is_stream": true
   },
   {
@@ -20,7 +22,8 @@
     "title": "Maulana Haidar Raza Qommi Sb Kopaganj | Majlis E Barsi | Late M. Zahirul Hasan Sb Kopaganj | 2025",
     "youtube_id": "R5oCIEXJ2Rk",
     "published": "2025-04-03T22:24:02Z",
-    "thumbnail": "https://img.youtube.com/vi/R5oCIEXJ2Rk/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/R5oCIEXJ2Rk/hqdefault.jpg",
+    "views": 353
   },
   {
     "id": "Bn1dHMji6fs",
@@ -28,6 +31,7 @@
     "youtube_id": "Bn1dHMji6fs",
     "published": "2025-04-02T18:10:05Z",
     "thumbnail": "https://img.youtube.com/vi/Bn1dHMji6fs/hqdefault.jpg",
+    "views": 475,
     "is_stream": true
   }
 ]

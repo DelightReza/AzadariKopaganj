@@ -119,7 +119,36 @@ def innertube_post(path: str, payload: Dict[str, Any]) -> Optional[str]:
 
 def clean_video_title(raw_title: str) -> str:
     cleaned = re.sub(r"^[🔴🟢🟡🔵⚫⚪]+\s*", "", (raw_title or "").strip()).strip()
+    cleaned = re.sub(
+        r",\s*[\d,.]+\s*(?:thousand|million|billion|[KMB])?\s+views?\s*-\s*play Short.*$",
+        "",
+        cleaned,
+        flags=re.I,
+    ).strip()
     return cleaned or "Azadari Kopaganj Broadcast"
+
+
+def parse_view_count_text(text: str) -> int:
+    raw = (text or "").strip()
+    if not raw:
+        return 0
+    m = re.search(r"([\d.,]+)\s*(thousand|million|billion|[KMB])?(?:\s+views?)?", raw, flags=re.I)
+    if not m:
+        return 0
+    try:
+        base = float(m.group(1).replace(",", ""))
+    except ValueError:
+        return 0
+    if base <= 0:
+        return 0
+    unit = (m.group(2) or "").lower()
+    if unit in ("thousand", "k"):
+        return int(round(base * 1000))
+    if unit in ("million", "m"):
+        return int(round(base * 1_000_000))
+    if unit in ("billion", "b"):
+        return int(round(base * 1_000_000_000))
+    return int(round(base))
 
 
 def parse_rss_videos(xml_text: str) -> Dict[str, Dict[str, str]]:
@@ -216,10 +245,27 @@ def scrape_channel_video_tab(tab_slug: str) -> List[Dict[str, Any]]:
                         seen_ids.add(cid)
                         md = lvm.get("metadata", {}).get("lockupMetadataViewModel", {})
                         title = md.get("title", {}).get("content") or ""
+                        views = 0
+                        rows = (
+                            md.get("metadata", {})
+                            .get("contentMetadataViewModel", {})
+                            .get("metadataRows", [])
+                        )
+                        for row in rows:
+                            for part in row.get("metadataParts", []):
+                                acc_label = str(part.get("accessibilityLabel") or "")
+                                txt_label = str(part.get("text", {}).get("content") or "")
+                                if "view" in acc_label.lower() or "view" in txt_label.lower():
+                                    views = parse_view_count_text(acc_label or txt_label)
+                                    if views > 0:
+                                        break
+                            if views > 0:
+                                break
                         items.append(
                             {
                                 "youtube_id": cid,
                                 "title": clean_video_title(title),
+                                "views": views,
                                 "tab": tab_slug,
                             }
                         )
@@ -230,10 +276,16 @@ def scrape_channel_video_tab(tab_slug: str) -> List[Dict[str, Any]]:
                         seen_ids.add(cid)
                         runs = vr.get("title", {}).get("runs", [])
                         title = "".join(r.get("text", "") for r in runs) or vr.get("title", {}).get("simpleText", "")
+                        vc = vr.get("viewCountText", {})
+                        svc = vr.get("shortViewCountText", {})
+                        vc_text = vc.get("simpleText") or "".join(r.get("text", "") for r in vc.get("runs", []))
+                        svc_text = svc.get("simpleText") or "".join(r.get("text", "") for r in svc.get("runs", []))
+                        views = parse_view_count_text(vc_text or svc_text)
                         items.append(
                             {
                                 "youtube_id": cid,
                                 "title": clean_video_title(title),
+                                "views": views,
                                 "tab": tab_slug,
                             }
                         )
@@ -248,12 +300,18 @@ def scrape_channel_video_tab(tab_slug: str) -> List[Dict[str, Any]]:
                     if isinstance(cid, str) and len(cid) == 11 and cid not in seen_ids:
                         seen_ids.add(cid)
                         acc = sl.get("accessibilityText") or ""
-                        # Trim ", 123 views - play Short" suffix from accessibilityText
-                        title = re.sub(r",\s*[\d,.KMB]+\s+views?\s*-\s*play Short.*$", "", acc, flags=re.I)
+                        sec_txt = str(sl.get("overlayMetadata", {}).get("secondaryText", {}).get("content") or "")
+                        views_match = re.search(
+                            r"([\d,.]+\s*(?:thousand|million|billion|[KMB])?\s*views?)",
+                            acc or sec_txt,
+                            flags=re.I,
+                        )
+                        views = parse_view_count_text(views_match.group(1) if views_match else sec_txt)
                         items.append(
                             {
                                 "youtube_id": cid,
-                                "title": clean_video_title(title),
+                                "title": clean_video_title(acc),
+                                "views": views,
                                 "tab": tab_slug,
                             }
                         )
@@ -537,7 +595,7 @@ def parse_community_post_renderer(
     pr: Dict[str, Any],
     exact_date_str: str,
     now_dt: datetime.datetime,
-) -> Dict[str, str]:
+) -> Dict[str, Any]:
     post_id = str(pr.get("postId") or "")
     runs = pr.get("contentText", {}).get("runs", [])
     full_text = "".join(str(r.get("text") or "") for r in runs).strip()
@@ -566,21 +624,39 @@ def parse_community_post_renderer(
     if not full_text:
         full_text = title
 
-    # Extract image_url and link_url from backstageAttachment or runs
+    # Extract image_url, images (multi-image), and link_url from backstageAttachment or runs
     image_url = ""
+    images_list: List[str] = []
     link_url = ""
+
+    def uncrop_post_image_url(raw_u: str) -> str:
+        u_clean = (raw_u or "").strip()
+        if not u_clean:
+            return ""
+        if u_clean.startswith("//"):
+            u_clean = "https:" + u_clean
+        if re.search(r"(?:yt3\.ggpht\.com|googleusercontent\.com)/", u_clean, flags=re.I):
+            u_clean = re.sub(r"=s\d+[^/]*$", "=s0", u_clean, flags=re.I)
+        return u_clean
 
     att = pr.get("backstageAttachment", {})
     if "backstageImageRenderer" in att:
         thumbs = att["backstageImageRenderer"].get("image", {}).get("thumbnails", [])
         if thumbs:
-            image_url = str(thumbs[-1].get("url") or "")
+            u = uncrop_post_image_url(str(thumbs[-1].get("url") or ""))
+            if u:
+                image_url = u
+                images_list.append(u)
     elif "postMultiImageRenderer" in att:
         imgs = att["postMultiImageRenderer"].get("images", [])
-        if imgs:
-            thumbs = imgs[0].get("backstageImageRenderer", {}).get("image", {}).get("thumbnails", [])
+        for img_item in imgs:
+            thumbs = img_item.get("backstageImageRenderer", {}).get("image", {}).get("thumbnails", [])
             if thumbs:
-                image_url = str(thumbs[-1].get("url") or "")
+                u = uncrop_post_image_url(str(thumbs[-1].get("url") or ""))
+                if u and u not in images_list:
+                    images_list.append(u)
+        if images_list:
+            image_url = images_list[0]
     elif "videoRenderer" in att:
         vr = att["videoRenderer"]
         vid = str(vr.get("videoId") or "")
@@ -612,7 +688,7 @@ def parse_community_post_renderer(
     if image_url.startswith("//"):
         image_url = "https:" + image_url
 
-    return {
+    payload: Dict[str, Any] = {
         "id": post_id,
         "date": date_yyyy_mm_dd,
         "title": title,
@@ -620,6 +696,9 @@ def parse_community_post_renderer(
         "image_url": image_url,
         "link_url": link_url,
     }
+    if len(images_list) > 1:
+        payload["images"] = images_list
+    return payload
 
 
 def extract_yyyy_mm(iso_or_date: str) -> Tuple[str, str]:
@@ -696,6 +775,7 @@ def main() -> None:
     ordered_channel_videos: List[Dict[str, Any]] = []
     seen_vid_ids: Set[str] = set()
     stream_vid_ids: Set[str] = {item["youtube_id"] for item in streams_tab_items}
+    short_vid_ids: Set[str] = {item["youtube_id"] for item in shorts_tab_items}
 
     for source_list in (videos_tab_items, streams_tab_items, shorts_tab_items):
         for item in source_list:
@@ -798,6 +878,7 @@ def main() -> None:
             ss = sec_of_day % 60
             published_iso = f"{cal_date.strftime('%Y-%m-%d')}T{hh:02d}:{mm_t:02d}:{ss:02d}Z"
 
+        views_val = int(item.get("views") or existing_videos.get(vid, {}).get("views") or 0)
         video_entry: Dict[str, Any] = {
             "id": vid,
             "title": title,
@@ -805,8 +886,12 @@ def main() -> None:
             "published": published_iso,
             "thumbnail": f"https://img.youtube.com/vi/{vid}/hqdefault.jpg",
         }
+        if views_val > 0:
+            video_entry["views"] = views_val
         if vid in stream_vid_ids:
             video_entry["is_stream"] = True
+        if vid in short_vid_ids and vid not in stream_vid_ids:
+            video_entry["is_short"] = True
 
         all_final_videos[vid] = video_entry
 
@@ -847,6 +932,13 @@ def main() -> None:
         if not pid:
             continue
         if pid in existing_posts and not force_refresh_dates:
+            # Backfill multi-image arrays onto cached posts if missing
+            if not existing_posts[pid].get("images"):
+                parsed_multi = parse_community_post_renderer(
+                    pr, str(existing_posts[pid].get("date") or ""), now_dt
+                )
+                if parsed_multi.get("images"):
+                    existing_posts[pid]["images"] = parsed_multi["images"]
             continue
         exact_date = post_dates_by_id.get(pid, "")
         parsed_post = parse_community_post_renderer(pr, exact_date, now_dt)
@@ -922,6 +1014,18 @@ def main() -> None:
     # 5. Write assets/livenow.json and config.json
     write_json(ASSETS_DIR / "livenow.json", live_state)
 
+    popular_candidates = [
+        v for v in all_final_videos.values() if not v.get("is_short")
+    ] or list(all_final_videos.values())
+    popular_sorted = sorted(
+        popular_candidates,
+        key=lambda x: (int(x.get("views") or 0), str(x.get("published") or "")),
+        reverse=True,
+    )
+    popular_video_ids = [
+        str(v.get("youtube_id") or v.get("id")) for v in popular_sorted[:16]
+    ]
+
     config_payload = {
         "version": 1,
         "channel_id": CHANNEL_ID,
@@ -939,6 +1043,7 @@ def main() -> None:
         "post_json_files": post_json_files,
         "latest_video_id": latest_video_id,
         "latest_video_title": latest_video_title,
+        "popular_video_ids": popular_video_ids,
         "is_live": bool(live_state.get("is_live", False)),
         "available_months": available_months,
     }

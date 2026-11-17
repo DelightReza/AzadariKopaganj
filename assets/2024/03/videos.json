@@ -5,6 +5,7 @@
     "youtube_id": "xElJCUyxln0",
     "published": "2024-03-31T15:42:58Z",
     "thumbnail": "https://img.youtube.com/vi/xElJCUyxln0/hqdefault.jpg",
+    "views": 1400,
     "is_stream": true
   },
   {
@@ -13,6 +14,7 @@
     "youtube_id": "12iK4wanxfk",
     "published": "2024-03-31T15:39:12Z",
     "thumbnail": "https://img.youtube.com/vi/12iK4wanxfk/hqdefault.jpg",
+    "views": 1400,
     "is_stream": true
   },
   {
@@ -21,13 +23,16 @@
     "youtube_id": "GnYg5WXdzek",
     "published": "2024-03-25T15:35:26Z",
     "thumbnail": "https://img.youtube.com/vi/GnYg5WXdzek/hqdefault.jpg",
+    "views": 1300,
     "is_stream": true
   },
   {
     "id": "DgXOKq7XTgw",
-    "title": "Qatile Binte Payambar Samne | Janab Mesam Kopaganji | Jashne Tajdare Wafa Kopaganj Mau 2024 #shorts, 1.6 thousand views - play Short",
+    "title": "Qatile Binte Payambar Samne | Janab Mesam Kopaganji | Jashne Tajdare Wafa Kopaganj Mau 2024 #shorts",
     "youtube_id": "DgXOKq7XTgw",
     "published": "2024-03-04T02:15:47Z",
-    "thumbnail": "https://img.youtube.com/vi/DgXOKq7XTgw/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/DgXOKq7XTgw/hqdefault.jpg",
+    "views": 1600,
+    "is_short": true
   }
 ]

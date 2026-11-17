@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   AlertCircle,
   Check,
+  FastForward,
   Loader2,
   Maximize,
   Maximize2,
@@ -27,12 +28,35 @@ import {
   type YTPlayerInstance,
 } from '../utils/youtubePlayerApi';
 
+const QUALITY_STORAGE_KEY = 'azadari_preferred_quality';
+const QUALITY_SYNC_EVENT = 'azadari-quality-change';
+
+function readStoredQuality(): YouTubeQualityLevel {
+  try {
+    const val = localStorage.getItem(QUALITY_STORAGE_KEY);
+    if (val && typeof val === 'string') return val;
+  } catch {
+    // ignore storage access errors
+  }
+  return 'auto';
+}
+
+function writeStoredQuality(level: YouTubeQualityLevel): void {
+  try {
+    localStorage.setItem(QUALITY_STORAGE_KEY, level);
+    window.dispatchEvent(new CustomEvent<YouTubeQualityLevel>(QUALITY_SYNC_EVENT, { detail: level }));
+  } catch {
+    // ignore storage access errors
+  }
+}
+
 export interface InbuiltVideoPlayerProps {
   youtubeId: string;
   title: string;
   thumbnailUrl?: string;
   mediaUrl?: string;
   isLive?: boolean;
+  isShort?: boolean;
   autoplay?: boolean;
   onEnded?: () => void;
   onNext?: () => void;
@@ -52,6 +76,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   thumbnailUrl,
   mediaUrl,
   isLive = false,
+  isShort = false,
   autoplay = false,
   onEnded,
   onNext,
@@ -71,19 +96,27 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   onEndedRef.current = onEnded;
 
   const [started, setStarted] = useState<boolean>(autoplay);
+  const [hasPlayedOnce, setHasPlayedOnce] = useState<boolean>(false);
   const [isPlaying, setIsPlaying] = useState<boolean>(false);
   const [isBuffering, setIsBuffering] = useState<boolean>(false);
   const [isEnded, setIsEnded] = useState<boolean>(false);
+  const [isAdPlaying, setIsAdPlaying] = useState<boolean>(false);
+  const [adSkipCountdown, setAdSkipCountdown] = useState<number>(5);
   const [playerError, setPlayerError] = useState<string | null>(null);
   const [currentTime, setCurrentTime] = useState<number>(0);
   const [duration, setDuration] = useState<number>(0);
   const [bufferedRatio, setBufferedRatio] = useState<number>(0);
+  const lastMainTimeRef = useRef<number>(0);
+  const autoSkipAttemptedForAdRef = useRef<string | null>(null);
+  const adStartWallTimeRef = useRef<number | null>(null);
   const [isMuted, setIsMuted] = useState<boolean>(false);
   const [volume, setVolume] = useState<number>(100);
   const [playbackRate, setPlaybackRate] = useState<number>(1);
   const [speedMenuOpen, setSpeedMenuOpen] = useState<boolean>(false);
   const [qualityMenuOpen, setQualityMenuOpen] = useState<boolean>(false);
-  const [selectedQuality, setSelectedQuality] = useState<YouTubeQualityLevel>('auto');
+  const [selectedQuality, setSelectedQuality] = useState<YouTubeQualityLevel>(() =>
+    readStoredQuality()
+  );
   const [actualQuality, setActualQuality] = useState<YouTubeQualityLevel | null>(null);
   const [availableQualities, setAvailableQualities] = useState<YouTubeQualityLevel[]>(
     DEFAULT_QUALITY_LEVELS
@@ -93,7 +126,9 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
   const [scrubRatio, setScrubRatio] = useState<number | null>(null);
   const [seekPreview, setSeekPreview] = useState<{ ratio: number; time: number } | null>(null);
-  const [skipFeedback, setSkipFeedback] = useState<'-10s' | '+10s' | 'LIVE' | null>(null);
+  const [skipFeedback, setSkipFeedback] = useState<'-10s' | '+10s' | 'LIVE' | 'Ad Skipped' | null>(
+    null
+  );
 
   const volumeRef = useRef<number>(volume);
   volumeRef.current = volume;
@@ -107,12 +142,32 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const resolvedThumb =
     thumbnailUrl || `https://img.youtube.com/vi/${youtubeId}/hqdefault.jpg`;
 
-  // Reset playback counters when video source changes
+  // Sync preferred quality across player instances and sessions
+  useEffect(() => {
+    const onQualitySync = (ev: Event) => {
+      const next = (ev as CustomEvent<YouTubeQualityLevel>).detail;
+      if (next && next !== selectedQualityRef.current) {
+        setSelectedQuality(next);
+        try {
+          ytPlayerRef.current?.setPlaybackQuality?.(next);
+        } catch {
+          // ignore
+        }
+      }
+    };
+    window.addEventListener(QUALITY_SYNC_EVENT, onQualitySync);
+    return () => window.removeEventListener(QUALITY_SYNC_EVENT, onQualitySync);
+  }, []);
+
+  // Reset per-video counters when source changes (preserving remembered quality)
   useEffect(() => {
     setCurrentTime(0);
     setDuration(0);
     setBufferedRatio(0);
+    setHasPlayedOnce(false);
     setIsEnded(false);
+    setIsAdPlaying(false);
+    setAdSkipCountdown(5);
     setPlayerError(null);
     setSpeedMenuOpen(false);
     setQualityMenuOpen(false);
@@ -124,6 +179,9 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     setStarted(autoplay);
     setIsPlaying(false);
     setIsBuffering(autoplay);
+    lastMainTimeRef.current = 0;
+    autoSkipAttemptedForAdRef.current = null;
+    adStartWallTimeRef.current = null;
   }, [youtubeId, mediaUrl, autoplay]);
 
   const scheduleHideHud = useCallback(() => {
@@ -205,12 +263,15 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           fs: 0,
           playsinline: 1,
         };
+        if (selectedQualityRef.current !== 'auto') {
+          playerVars.vq = selectedQualityRef.current;
+        }
         if (origin) {
           playerVars.origin = origin;
         }
 
         const instance = new YT.Player(targetEl, {
-          host: 'https://www.youtube-nocookie.com',
+          host: 'https://www.youtube.com',
           videoId: youtubeId,
           width: '100%',
           height: '100%',
@@ -224,6 +285,10 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
                 else ev.target.unMute();
                 ev.target.setPlaybackRate(playbackRateRef.current);
                 if (selectedQualityRef.current !== 'auto') {
+                  ev.target.setPlaybackQualityRange?.(
+                    selectedQualityRef.current,
+                    selectedQualityRef.current
+                  );
                   ev.target.setPlaybackQuality?.(selectedQualityRef.current);
                 }
                 syncAvailableQualities(ev.target);
@@ -236,9 +301,21 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
               if (cancelled) return;
               const st = ev.data;
               if (st === YT.PlayerState.PLAYING) {
+                setHasPlayedOnce(true);
                 setIsPlaying(true);
                 setIsBuffering(false);
                 setIsEnded(false);
+                if (selectedQualityRef.current !== 'auto') {
+                  try {
+                    ev.target.setPlaybackQualityRange?.(
+                      selectedQualityRef.current,
+                      selectedQualityRef.current
+                    );
+                    ev.target.setPlaybackQuality?.(selectedQualityRef.current);
+                  } catch {
+                    // ignore
+                  }
+                }
                 syncAvailableQualities(ev.target);
                 try {
                   const d = ev.target.getDuration();
@@ -302,25 +379,109 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     };
   }, [started, youtubeId, mediaUrl, syncAvailableQualities]);
 
+  const handleSkipAd = useCallback(() => {
+    const p = ytPlayerRef.current;
+    if (!p) return;
+    try {
+      const adDur = p.getDuration();
+      if (Number.isFinite(adDur) && adDur > 0) {
+        p.seekTo(adDur, true);
+      }
+      // Verify after 550ms whether seeking ended the ad; if still on ad stream, re-cue main video
+      window.setTimeout(() => {
+        const curPlayer = ytPlayerRef.current;
+        if (!curPlayer) return;
+        try {
+          const currentLoadedId = curPlayer.getVideoData?.()?.video_id;
+          if (currentLoadedId && currentLoadedId !== youtubeId) {
+            const resumeAt = Math.max(0, Math.floor(lastMainTimeRef.current || 0));
+            curPlayer.loadVideoById({
+              videoId: youtubeId,
+              startSeconds: isLive ? 0 : resumeAt,
+              ...(selectedQualityRef.current !== 'auto'
+                ? { suggestedQuality: selectedQualityRef.current }
+                : {}),
+            });
+          }
+          if (!isMutedRef.current) {
+            curPlayer.unMute();
+          }
+          curPlayer.setPlaybackRate(playbackRateRef.current);
+        } catch {
+          // ignore
+        }
+      }, 550);
+
+      setIsAdPlaying(false);
+      adStartWallTimeRef.current = null;
+      setSkipFeedback('Ad Skipped');
+      window.setTimeout(() => setSkipFeedback(null), 1100);
+    } catch {
+      // ignore
+    }
+  }, [youtubeId, isLive]);
+
   // Poll playback progress cleanly for YT engine (paused while user drags slider)
   useEffect(() => {
     if (!started || mediaUrl) return;
+    const AUTO_SKIP_AFTER_SECONDS = 5;
+
     const timer = window.setInterval(() => {
       const p = ytPlayerRef.current;
       if (!p || isScrubbing) return;
       try {
+        const activeVidId = p.getVideoData?.()?.video_id;
+        const adDetected = Boolean(activeVidId && activeVidId !== youtubeId);
+        setIsAdPlaying(adDetected);
+
+        if (adDetected && activeVidId) {
+          if (adStartWallTimeRef.current === null) {
+            adStartWallTimeRef.current = Date.now();
+          }
+          const adCur = p.getCurrentTime();
+          const wallElapsed = (Date.now() - adStartWallTimeRef.current) / 1000;
+          const elapsedAdSec =
+            Number.isFinite(adCur) && adCur > 0 ? Math.max(adCur, wallElapsed) : wallElapsed;
+          const remaining = Math.max(0, Math.ceil(AUTO_SKIP_AFTER_SECONDS - elapsedAdSec));
+          setAdSkipCountdown(remaining);
+
+          // Once the 5-second skippable window has played, automatically skip the ad
+          if (
+            elapsedAdSec >= AUTO_SKIP_AFTER_SECONDS &&
+            autoSkipAttemptedForAdRef.current !== activeVidId
+          ) {
+            autoSkipAttemptedForAdRef.current = activeVidId;
+            handleSkipAd();
+          }
+          return;
+        }
+
+        adStartWallTimeRef.current = null;
+
         const cur = p.getCurrentTime();
         const dur = p.getDuration();
         const frac = p.getVideoLoadedFraction();
-        if (Number.isFinite(cur)) setCurrentTime(cur);
-        if (Number.isFinite(dur) && dur > 0) setDuration(dur);
+        if (Number.isFinite(cur)) {
+          setCurrentTime(cur);
+          if (cur > 0) {
+            lastMainTimeRef.current = cur;
+          }
+        }
+        if (Number.isFinite(dur) && dur > 0) {
+          setDuration(dur);
+          // Seamless loop for Shorts before YouTube's end-screen suggestion wall appears
+          if (isShort && !isLive && dur > 2 && dur - cur <= 0.3) {
+            p.seekTo(0, true);
+            p.playVideo();
+          }
+        }
         if (Number.isFinite(frac)) setBufferedRatio(Math.max(0, Math.min(1, frac)));
       } catch {
         // ignore transient calls while destroying
       }
     }, 250);
     return () => window.clearInterval(timer);
-  }, [started, mediaUrl, isScrubbing]);
+  }, [started, mediaUrl, isScrubbing, youtubeId, isShort, isLive, handleSkipAd]);
 
   const handleTogglePlay = useCallback(() => {
     if (!started) {
@@ -480,21 +641,38 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const handleQualityChange = useCallback(
     (level: YouTubeQualityLevel) => {
       setSelectedQuality(level);
+      writeStoredQuality(level);
       setQualityMenuOpen(false);
       if (mediaUrl) return;
       const p = ytPlayerRef.current;
       if (p) {
         try {
-          p.setPlaybackQuality?.(level);
-          if (level !== 'auto') {
-            setActualQuality(level);
+          if (level === 'auto') {
+            p.setPlaybackQualityRange?.('tiny', 'highres');
+            p.setPlaybackQuality?.('default');
+          } else {
+            p.setPlaybackQualityRange?.(level, level);
+            p.setPlaybackQuality?.(level);
+            if (!isLive && isPlaying) {
+              const cur = p.getCurrentTime?.() ?? currentTime;
+              p.loadVideoById({
+                videoId: youtubeId,
+                startSeconds: Number.isFinite(cur) && cur > 0 ? Math.floor(cur) : 0,
+                suggestedQuality: level,
+              });
+            }
           }
+          window.setTimeout(() => {
+            if (ytPlayerRef.current === p) {
+              syncAvailableQualities(p);
+            }
+          }, 500);
         } catch {
           // ignore unsupported quality switches
         }
       }
     },
-    [mediaUrl]
+    [mediaUrl, isLive, isPlaying, currentTime, youtubeId, syncAvailableQualities]
   );
 
   const handleToggleFullscreen = useCallback(async () => {
@@ -635,13 +813,18 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
   const qualityButtonLabel = useMemo(() => {
     if (selectedQuality === 'auto') {
-      if (actualQuality && actualQuality !== 'auto') {
-        return formatQualityLabel(actualQuality, true);
-      }
-      return 'Auto';
+      const actualShort =
+        actualQuality && actualQuality !== 'auto' && actualQuality !== 'default'
+          ? formatQualityLabel(actualQuality, true)
+          : null;
+      return actualShort ? `Auto (${actualShort})` : 'Auto';
     }
     return formatQualityLabel(selectedQuality, true);
   }, [selectedQuality, actualQuality]);
+
+  const frameSizeClasses = isShort
+    ? 'aspect-[9/16] w-full max-w-[360px] sm:max-w-[400px] max-h-[78vh] mx-auto'
+    : 'aspect-video w-full';
 
   return (
     <div
@@ -656,7 +839,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           setHudVisible(false);
         }
       }}
-      className={`@container group/player relative aspect-video w-full bg-black overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] ${className}`}
+      className={`@container group/player relative ${frameSizeClasses} bg-black overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] ${className}`}
     >
       {/* 1A. Direct HTML5 Media Engine (if stream URL supplied) */}
       {started && mediaUrl && (
@@ -695,19 +878,28 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         />
       )}
 
-      {/* 1B. Headless Video Playback Frame (controls hidden, clicks routed to inbuilt HUD) */}
+      {/* 1B. Headless Video Playback Frame (300% vertical overscan pushes YouTube's top title bar & bottom watermark completely outside overflow-hidden on both 9:16 Shorts and 16:9 Videos) */}
       {started && !mediaUrl && (
         <div
           ref={ytHostRef}
           aria-hidden="true"
-          className="absolute inset-0 w-full h-full pointer-events-none"
+          className="absolute inset-x-0 -top-[100%] w-full h-[300%] pointer-events-none"
         />
       )}
 
-      {/* 2. Poster / Paused / Ended Overlay (Zero external player branding) */}
-      {(!started || (!isPlaying && !isBuffering)) && !playerError && (
-        <div className="absolute inset-0 z-10 flex items-center justify-center">
-          {(!started || isEnded) && (
+      {/* 2. Poster / Pre-Play Shield / Paused / Ended Backdrop Overlay (Covers YouTube startup UI until first playing frame) */}
+      {(!started || !hasPlayedOnce || (!isPlaying && !isBuffering) || isEnded) && !playerError && (
+        <div
+          onClick={() => {
+            if (speedMenuOpen || qualityMenuOpen) {
+              setSpeedMenuOpen(false);
+              setQualityMenuOpen(false);
+            }
+            scheduleHideHud();
+          }}
+          className="absolute inset-0 z-10"
+        >
+          {(!started || !hasPlayedOnce || isEnded) && (
             <div className="absolute inset-0">
               <ResilientThumbnail
                 src={resolvedThumb}
@@ -719,36 +911,41 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
           <div
             className={`absolute inset-0 transition-opacity ${
-              !started || isEnded
-                ? 'bg-gradient-to-t from-black/80 via-black/30 to-black/45'
+              !started || !hasPlayedOnce || isEnded
+                ? 'bg-gradient-to-t from-black/80 via-black/30 to-black/35'
                 : 'bg-black/65 backdrop-blur-[3px]'
             }`}
           />
+        </div>
+      )}
 
-          {/* Top-Left Inbuilt Brand Watermark Badge */}
-          <div className="absolute top-3 left-3 z-20 flex items-center gap-2 px-2.5 py-1 rounded-full bg-black/75 border border-white/15 backdrop-blur-md">
-            <img
-              src="./azadari-logo.png"
-              alt="Azadari Kopaganj"
-              className="h-4 w-auto object-contain bg-white rounded px-1 py-0.5"
-            />
-            <span className="text-[11px] font-semibold text-white tracking-tight">
-              Azadari Kopaganj Player
-            </span>
-            {isLive && (
-              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-[#FF0000] text-[10px] font-bold uppercase text-white">
-                <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse" />
-                Live
-              </span>
-            )}
-          </div>
+      {/* 3. Active HUD Surface (Clicking anywhere wakes HUD & closes menus without pausing) */}
+      {started && (isPlaying || isBuffering) && !playerError && (
+        <div
+          onClick={() => {
+            if (speedMenuOpen || qualityMenuOpen) {
+              setSpeedMenuOpen(false);
+              setQualityMenuOpen(false);
+            }
+            scheduleHideHud();
+          }}
+          onDoubleClick={(e) => {
+            const rect = e.currentTarget.getBoundingClientRect();
+            const isLeftHalf = e.clientX - rect.left < rect.width / 2;
+            handleSkipBy(isLeftHalf ? -10 : 10);
+          }}
+          className="absolute inset-0 z-10"
+        />
+      )}
 
-          {/* Center Play / Replay Button */}
+      {/* Center Play / Replay Button (Above HUD Surface) */}
+      {(!started || (!isPlaying && !isBuffering)) && !playerError && (
+        <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center">
           <button
             type="button"
             onClick={handleTogglePlay}
             aria-label={isEnded ? 'Replay video' : 'Play video'}
-            className="relative z-20 w-16 h-16 sm:w-[70px] sm:h-[70px] rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-2xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer ring-4 ring-white/25"
+            className="pointer-events-auto w-16 h-16 sm:w-[70px] sm:h-[70px] rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white shadow-2xl flex items-center justify-center transition-transform hover:scale-105 active:scale-95 cursor-pointer ring-4 ring-white/25"
           >
             {isEnded ? (
               <RotateCcw className="w-7 h-7" />
@@ -757,26 +954,6 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
             )}
           </button>
         </div>
-      )}
-
-      {/* 3. Active Click Surface & Double-Tap Seek Zones */}
-      {started && !playerError && (
-        <div
-          onClick={() => {
-            if (speedMenuOpen || qualityMenuOpen) {
-              setSpeedMenuOpen(false);
-              setQualityMenuOpen(false);
-              return;
-            }
-            handleTogglePlay();
-          }}
-          onDoubleClick={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const isLeftHalf = e.clientX - rect.left < rect.width / 2;
-            handleSkipBy(isLeftHalf ? -10 : 10);
-          }}
-          className="absolute inset-0 z-10 cursor-pointer"
-        />
       )}
 
       {/* 4. Buffering & Error States */}
@@ -796,8 +973,39 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
         </div>
       )}
 
+      {/* Ad Countdown & Auto-Skip Pill (Plays ad for 5s then skips automatically) */}
+      {isAdPlaying && !playerError && (
+        <div className="absolute bottom-14 right-3 sm:right-4 z-30 flex items-center gap-2">
+          <span className="px-3 py-1.5 rounded-full bg-black/85 backdrop-blur-md text-white text-[11px] font-semibold border border-white/20 tabular-nums shadow-lg">
+            {adSkipCountdown > 0
+              ? `Ad · Auto-skipping in ${adSkipCountdown}s`
+              : 'Skipping ad...'}
+          </span>
+          <button
+            type="button"
+            onClick={(e) => {
+              e.stopPropagation();
+              handleSkipAd();
+            }}
+            className="px-3.5 py-1.5 rounded-full bg-[#FF0000] hover:bg-[#CC0000] text-white text-xs font-bold shadow-2xl ring-1 ring-white/30 flex items-center gap-1.5 cursor-pointer transition-transform hover:scale-105"
+          >
+            <span>Skip Now</span>
+            <FastForward className="w-3.5 h-3.5 fill-white" />
+          </button>
+        </div>
+      )}
+
       {playerError && (
-        <div className="absolute inset-0 z-30 flex flex-col items-center justify-center p-4 text-center">
+        <div
+          onClick={() => {
+            if (speedMenuOpen || qualityMenuOpen) {
+              setSpeedMenuOpen(false);
+              setQualityMenuOpen(false);
+            }
+            scheduleHideHud();
+          }}
+          className="absolute inset-0 z-30 flex flex-col items-center justify-center p-3 pb-12 sm:p-4 text-center"
+        >
           <div className="absolute inset-0">
             <ResilientThumbnail
               src={resolvedThumb}
@@ -807,9 +1015,9 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           </div>
           <div className="absolute inset-0 bg-[#0F0F0F]/92 backdrop-blur-md" />
           <div className="relative z-10 flex flex-col items-center max-w-sm">
-            <AlertCircle className="w-8 h-8 text-[#FF0000] mb-2" />
-            <p className="text-xs sm:text-sm text-white font-medium">{playerError}</p>
-            <div className="mt-3 flex flex-wrap items-center justify-center gap-2">
+            <AlertCircle className="w-6 h-6 sm:w-8 sm:h-8 text-[#FF0000] mb-1.5 sm:mb-2" />
+            <p className="text-xs sm:text-sm text-white font-medium leading-snug">{playerError}</p>
+            <div className="mt-2 sm:mt-3 flex flex-wrap items-center justify-center gap-2">
               <button
                 type="button"
                 onClick={() => {
@@ -942,7 +1150,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
               </button>
             )}
 
-            {/* Rewind / Forward 10s (Enabled on both Live DVR and VOD) */}
+            {/* Rewind / Forward 10s */}
             <button
               type="button"
               onClick={() => handleSkipBy(-10)}
@@ -1017,7 +1225,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           </div>
 
           <div className="flex items-center gap-0.5 @[580px]:gap-1 relative shrink-0">
-            {/* Quality Selector */}
+            {/* Quality Selector (Persisted across all videos) */}
             {!mediaUrl && (
               <div className="relative">
                 <button
@@ -1039,33 +1247,47 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
                   <div
                     role="menu"
                     aria-label="Quality options"
-                    className="absolute right-0 bottom-9 z-40 py-1 w-36 max-h-48 overflow-y-auto rounded-lg bg-[#181818]/95 border border-white/15 shadow-xl backdrop-blur-md"
+                    className="absolute right-0 bottom-8 @[580px]:bottom-9 z-40 p-1.5 @[580px]:p-2 w-56 @[580px]:w-60 rounded-lg bg-[#181818]/95 border border-white/15 shadow-xl backdrop-blur-md"
                   >
-                    <div className="px-3 py-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400 border-b border-white/10">
-                      Quality
+                    <div className="flex items-center justify-between gap-1.5 pb-1 border-b border-white/10">
+                      <span className="px-1 text-[10px] font-bold uppercase tracking-wider text-neutral-400">
+                        Quality
+                      </span>
+                      {actualQuality && actualQuality !== 'auto' && actualQuality !== 'default' && (
+                        <span className="px-1 text-[10px] text-neutral-300">
+                          Stream: {formatQualityLabel(actualQuality, true)}
+                        </span>
+                      )}
                     </div>
-                    {availableQualities.map((level) => {
-                      const isActive = selectedQuality === level;
-                      const label =
-                        level === 'auto' && actualQuality && actualQuality !== 'auto'
-                          ? `Auto (${formatQualityLabel(actualQuality, true)})`
-                          : formatQualityLabel(level);
-                      return (
-                        <button
-                          key={level}
-                          type="button"
-                          role="menuitemradio"
-                          aria-checked={isActive}
-                          onClick={() => handleQualityChange(level)}
-                          className={`w-full px-3 py-1.5 text-left text-xs flex items-center justify-between hover:bg-white/10 cursor-pointer ${
-                            isActive ? 'text-[#FF0000] font-bold' : 'text-white'
-                          }`}
-                        >
-                          <span>{label}</span>
-                          {isActive && <Check className="w-3.5 h-3.5" />}
-                        </button>
-                      );
-                    })}
+
+                    <div className="mt-1 grid grid-cols-3 gap-1">
+                      {availableQualities.map((level) => {
+                        const isActive = selectedQuality === level;
+                        const label =
+                          level === 'auto' && actualQuality && actualQuality !== 'auto'
+                            ? `Auto (${formatQualityLabel(actualQuality, true)})`
+                            : formatQualityLabel(level, true);
+                        return (
+                          <button
+                            key={level}
+                            type="button"
+                            role="menuitemradio"
+                            aria-checked={isActive}
+                            onClick={() => handleQualityChange(level)}
+                            className={`px-1.5 py-1 rounded text-left text-[11px] flex items-center justify-between gap-1 hover:bg-white/15 cursor-pointer ${
+                              level === 'auto' ? 'col-span-3' : ''
+                            } ${
+                              isActive
+                                ? 'bg-[#FF0000]/20 text-[#FF0000] font-bold ring-1 ring-[#FF0000]/50'
+                                : 'bg-white/5 text-white'
+                            }`}
+                          >
+                            <span className="truncate">{label}</span>
+                            {isActive && <Check className="w-3 h-3 shrink-0" />}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 )}
               </div>

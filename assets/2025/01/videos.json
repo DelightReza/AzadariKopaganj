@@ -1,24 +1,29 @@
 [
   {
     "id": "xgy7LDh_Nnk",
-    "title": "28 Rajab Noha | Anjuman Haideri Kopaganj Mau | #viral #shorts #28rajab #28rajabghosi #trending, 2.9 thousand views - play Short",
+    "title": "28 Rajab Noha | Anjuman Haideri Kopaganj Mau | #viral #shorts #28rajab #28rajabghosi #trending",
     "youtube_id": "xgy7LDh_Nnk",
     "published": "2025-01-29T03:31:13Z",
-    "thumbnail": "https://img.youtube.com/vi/xgy7LDh_Nnk/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/xgy7LDh_Nnk/hqdefault.jpg",
+    "views": 2900,
+    "is_short": true
   },
   {
     "id": "bFvTy0ab0nE",
     "title": "Juloos Amari Ghosi | Apna Desh Chhod kar Karabala Chale Husain (a.s) | Maulana Shafqat Ghosi",
     "youtube_id": "bFvTy0ab0nE",
     "published": "2025-01-28T22:22:53Z",
-    "thumbnail": "https://img.youtube.com/vi/bFvTy0ab0nE/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/bFvTy0ab0nE/hqdefault.jpg",
+    "views": 808
   },
   {
     "id": "dEBkAZq0BBk",
     "title": "Bura Dost | Maulana Sayed Payam Haider Rizvi Sb | #viral #shorts #shortsfeed #new  #reels #islamic",
     "youtube_id": "dEBkAZq0BBk",
     "published": "2025-01-25T03:27:27Z",
-    "thumbnail": "https://img.youtube.com/vi/dEBkAZq0BBk/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/dEBkAZq0BBk/hqdefault.jpg",
+    "views": 656,
+    "is_short": true
   },
   {
     "id": "5rGtjbDnd2k",
@@ -26,6 +31,7 @@
     "youtube_id": "5rGtjbDnd2k",
     "published": "2025-01-13T17:39:54Z",
     "thumbnail": "https://img.youtube.com/vi/5rGtjbDnd2k/hqdefault.jpg",
+    "views": 2800,
     "is_stream": true
   },
   {
@@ -34,6 +40,7 @@
     "youtube_id": "cP14oN9OKL4",
     "published": "2025-01-03T17:36:08Z",
     "thumbnail": "https://img.youtube.com/vi/cP14oN9OKL4/hqdefault.jpg",
+    "views": 359,
     "is_stream": true
   }
 ]

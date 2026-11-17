@@ -429,3 +429,139 @@ export function getMonthKeyFromAvailable(m: AvailableMonth): string {
   return `${m.yyyy}-${m.mm.padStart(2, '0')}`;
 }
 
+/**
+ * Extracts a numeric view count from an explicit `views` field or title suffix
+ * such as ", 34 thousand views - play Short" or ", 1.5K views".
+ */
+export function extractVideoViewCount(
+  video: Pick<VideoItem, 'title'> & { views?: number }
+): number {
+  if (typeof video.views === 'number' && Number.isFinite(video.views) && video.views > 0) {
+    return Math.round(video.views);
+  }
+  const title = video.title || '';
+  const match = title.match(/([\d.,]+)\s*(thousand|million|billion|k|m|b)?\s*views?\b/i);
+  if (!match) return 0;
+
+  const base = Number.parseFloat(match[1].replace(/,/g, ''));
+  if (!Number.isFinite(base) || base <= 0) return 0;
+
+  const unit = (match[2] || '').toLowerCase();
+  if (unit === 'thousand' || unit === 'k') return Math.round(base * 1000);
+  if (unit === 'million' || unit === 'm') return Math.round(base * 1000000);
+  if (unit === 'billion' || unit === 'b') return Math.round(base * 1000000000);
+  return Math.round(base);
+}
+
+export function formatCompactViewCount(views: number): string {
+  if (!Number.isFinite(views) || views <= 0) return '';
+  if (views >= 1_000_000) {
+    return `${(views / 1_000_000).toFixed(1).replace(/\.0$/, '')}M views`;
+  }
+  if (views >= 1_000) {
+    return `${(views / 1_000).toFixed(1).replace(/\.0$/, '')}K views`;
+  }
+  return `${Math.round(views)} views`;
+}
+
+/**
+ * Returns the most popular full videos/streams sorted by view count (descending),
+ * honoring precomputed YouTube `popularIds` when provided and excluding Shorts
+ * unless fewer than `limit` full videos exist.
+ */
+export function getPopularVideos(
+  videos: VideoItem[],
+  limit: number = 8,
+  popularIds?: string[]
+): VideoItem[] {
+  const nonShorts = videos.filter((v) => !v.is_short);
+  const pool = nonShorts.length >= limit ? nonShorts : videos;
+
+  if (popularIds && popularIds.length > 0) {
+    const byId = new Map<string, VideoItem>();
+    for (const v of pool) {
+      byId.set(v.youtube_id || v.id, v);
+    }
+    const ordered: VideoItem[] = [];
+    const picked = new Set<string>();
+    for (const id of popularIds) {
+      const match = byId.get(id);
+      if (match && !picked.has(id)) {
+        ordered.push(match);
+        picked.add(id);
+        if (ordered.length >= limit) return ordered;
+      }
+    }
+    const remaining = [...pool]
+      .filter((v) => !picked.has(v.youtube_id || v.id))
+      .sort((a, b) => {
+        const viewsDiff = extractVideoViewCount(b) - extractVideoViewCount(a);
+        if (viewsDiff !== 0) return viewsDiff;
+        return b.published.localeCompare(a.published);
+      });
+    return [...ordered, ...remaining].slice(0, limit);
+  }
+
+  return [...pool]
+    .sort((a, b) => {
+      const viewsDiff = extractVideoViewCount(b) - extractVideoViewCount(a);
+      if (viewsDiff !== 0) return viewsDiff;
+      return b.published.localeCompare(a.published);
+    })
+    .slice(0, limit);
+}
+
+/**
+ * Identifies vertical YouTube Shorts from explicit `is_short` flag or Shorts title markers.
+ */
+export function isShortVideo(video: Pick<VideoItem, 'title' | 'is_short'>): boolean {
+  if (video.is_short) return true;
+  return /#shorts?\b|play short/i.test(video.title || '');
+}
+
+/**
+ * Strips YouTube/Google CDN 1:1 square-crop parameters (e.g. `=s1706-c-fcrop64=1,...`)
+ * from `yt3.ggpht.com` / `googleusercontent.com` community post image URLs so the
+ * server returns the full, uncropped original aspect ratio (`=s0`).
+ */
+export function toUncroppedPostImageUrl(rawUrl: string): string {
+  const trimmed = (rawUrl || '').trim();
+  if (!trimmed) return '';
+  const withProto = trimmed.startsWith('//') ? `https:${trimmed}` : trimmed;
+  if (/(?:yt3\.ggpht\.com|googleusercontent\.com)\//i.test(withProto)) {
+    return withProto.replace(/=s\d+[^/]*$/i, '=s0');
+  }
+  return withProto;
+}
+
+/**
+ * Normalizes and deduplicates all image URLs on a community post (supporting both
+ * single `image_url` and multi-image `images` / `image_urls` arrays) and converts
+ * cropped YouTube Backstage URLs to full uncropped URLs.
+ */
+export function getPostImages(
+  post: Pick<CommunityPost, 'image_url' | 'images'> & { image_urls?: string[] }
+): string[] {
+  const candidates: string[] = [];
+  if (Array.isArray(post.images)) {
+    candidates.push(...post.images);
+  }
+  if (Array.isArray(post.image_urls)) {
+    candidates.push(...post.image_urls);
+  }
+  if (post.image_url) {
+    candidates.push(post.image_url);
+  }
+
+  const seen = new Set<string>();
+  const result: string[] = [];
+  for (const raw of candidates) {
+    const normalized = toUncroppedPostImageUrl(typeof raw === 'string' ? raw : '');
+    if (!normalized) continue;
+    if (!seen.has(normalized)) {
+      seen.add(normalized);
+      result.push(normalized);
+    }
+  }
+  return result;
+}

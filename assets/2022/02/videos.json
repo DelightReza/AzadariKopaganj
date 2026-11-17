@@ -4,7 +4,9 @@
     "title": "نیاز امام جعفر صادق علیہ السلام | 22 رجب",
     "youtube_id": "yAasCg7CpME",
     "published": "2022-02-23T00:26:24Z",
-    "thumbnail": "https://img.youtube.com/vi/yAasCg7CpME/hqdefault.jpg"
+    "thumbnail": "https://img.youtube.com/vi/yAasCg7CpME/hqdefault.jpg",
+    "views": 732,
+    "is_short": true
   },
   {
     "id": "aCGW0soFzUk",
@@ -12,6 +14,7 @@
     "youtube_id": "aCGW0soFzUk",
     "published": "2022-02-14T10:26:08Z",
     "thumbnail": "https://img.youtube.com/vi/aCGW0soFzUk/hqdefault.jpg",
+    "views": 554,
     "is_stream": true
   },
   {
@@ -20,6 +23,7 @@
     "youtube_id": "l27hAfUIdNg",
     "published": "2022-02-14T10:22:22Z",
     "thumbnail": "https://img.youtube.com/vi/l27hAfUIdNg/hqdefault.jpg",
+    "views": 261,
     "is_stream": true
   },
   {
@@ -28,6 +32,7 @@
     "youtube_id": "g_H2nyGoCbQ",
     "published": "2022-02-14T10:18:35Z",
     "thumbnail": "https://img.youtube.com/vi/g_H2nyGoCbQ/hqdefault.jpg",
+    "views": 142,
     "is_stream": true
   }
 ]

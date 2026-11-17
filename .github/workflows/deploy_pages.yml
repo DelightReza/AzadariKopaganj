@@ -1,4 +1,4 @@
-name: Deploy Azadari Kopaganj & Signed APK to GitHub Pages
+name: Deploy Azadari Kopaganj to GitHub Pages
 
 on:
   push:
@@ -26,13 +26,10 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Set up Python 3.12 & Pillow
+      - name: Set up Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: "3.12"
-
-      - name: Install Pillow for Android Adaptive Launcher Icons
-        run: pip install --upgrade pip pillow
 
       - name: Sync latest YouTube RSS & live stream manifests
         run: python3 update_feed.py
@@ -41,66 +38,12 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: "22"
-          cache: "npm"
-
-      - name: Set up JDK 21 for Android Gradle
-        uses: actions/setup-java@v4
-        with:
-          distribution: "temurin"
-          java-version: "21"
 
       - name: Install dependencies
         run: npm install
 
       - name: Build static web bundle (dist/ + config.json + assets/)
         run: npm run build
-
-      - name: Add or sync Capacitor Android platform (com.azadari.kopaganj)
-        run: |
-          if [ ! -d "android" ]; then
-            npx cap add android
-          fi
-          npx cap sync android
-
-      - name: Decode Release Keystore from GitHub Secrets
-        env:
-          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
-          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
-        run: |
-          if [ -z "$KEYSTORE_BASE64" ]; then
-            echo "Error: ANDROID_KEYSTORE_BASE64 secret is not configured in GitHub Repository Secrets."
-            exit 1
-          fi
-
-          KEYSTORE_PATH="$RUNNER_TEMP/azadarikopaganj-release.jks"
-          echo "$KEYSTORE_BASE64" | tr -d ' \n\r' | base64 --decode > "$KEYSTORE_PATH"
-
-          echo "RELEASE_STORE_FILE=$KEYSTORE_PATH" >> "$GITHUB_ENV"
-          echo "RELEASE_STORE_PASSWORD=${KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_ALIAS=${KEY_ALIAS}" >> "$GITHUB_ENV"
-          echo "RELEASE_KEY_PASSWORD=${KEY_PASSWORD:-$KEYSTORE_PASSWORD}" >> "$GITHUB_ENV"
-
-      - name: Configure Azadari Kopaganj (com.azadari.kopaganj) & Adaptive Logo
-        env:
-          INPUT_VERSION_NAME: "1.0.0"
-          INPUT_VERSION_CODE: ${{ github.run_number || '1' }}
-        run: python3 configure_android_app.py
-
-      - name: Assemble Signed Release APK via Gradle
-        working-directory: android
-        run: |
-          chmod +x gradlew
-          ./gradlew assembleRelease --no-daemon
-
-      - name: Stage Signed APK into GitHub Pages dist/
-        run: |
-          APK_PATH=$(find android/app/build/outputs/apk/release -name "*.apk" | head -n 1)
-          if [ -n "$APK_PATH" ]; then
-            cp "$APK_PATH" "dist/Azadari Kopaganj.apk"
-            cp "$APK_PATH" "dist/Azadari-Kopaganj.apk"
-          fi
 
       - name: Configure GitHub Pages
         uses: actions/configure-pages@v5

@@ -127,6 +127,15 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   );
   const [hudVisible, setHudVisible] = useState<boolean>(true);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+  const [pseudoFullscreen, setPseudoFullscreen] = useState<boolean>(false);
+  const [orientationLockDenied, setOrientationLockDenied] = useState<boolean>(false);
+  const [isPortraitTouchViewport, setIsPortraitTouchViewport] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    return (
+      window.innerHeight > window.innerWidth &&
+      window.matchMedia('(pointer: coarse)').matches
+    );
+  });
   const [isScrubbing, setIsScrubbing] = useState<boolean>(false);
   const [scrubRatio, setScrubRatio] = useState<number | null>(null);
   const [seekPreview, setSeekPreview] = useState<{ ratio: number; time: number } | null>(null);
@@ -215,14 +224,143 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     };
   }, [isPlaying, speedMenuOpen, qualityMenuOpen, isScrubbing, scheduleHideHud]);
 
-  // Listen to fullscreen state changes
+  const effectiveFullscreen = isFullscreen || pseudoFullscreen;
+  const pseudoRotateLandscape =
+    effectiveFullscreen && !isShort && orientationLockDenied && isPortraitTouchViewport;
+
+  const lockOrientationForPlayer = useCallback(async (shortMode: boolean): Promise<boolean> => {
+    try {
+      const orientation = screen.orientation as ScreenOrientation & {
+        lock?: (mode: string) => Promise<void>;
+      };
+      if (orientation && typeof orientation.lock === 'function') {
+        const candidates = shortMode
+          ? ['portrait', 'portrait-primary']
+          : ['landscape', 'landscape-primary'];
+        for (const mode of candidates) {
+          try {
+            await orientation.lock(mode);
+            setOrientationLockDenied(false);
+            return true;
+          } catch {
+            // try next candidate
+          }
+        }
+      }
+    } catch {
+      // Orientation lock is unsupported or blocked
+    }
+    setOrientationLockDenied(true);
+    return false;
+  }, []);
+
+  const unlockOrientation = useCallback(() => {
+    setOrientationLockDenied(false);
+    try {
+      const orientation = screen.orientation as ScreenOrientation & {
+        unlock?: () => void;
+      };
+      orientation?.unlock?.();
+    } catch {
+      // ignore unsupported unlock
+    }
+  }, []);
+
   useEffect(() => {
+    const updateViewport = () => {
+      setIsPortraitTouchViewport(
+        window.innerHeight > window.innerWidth &&
+          window.matchMedia('(pointer: coarse)').matches
+      );
+    };
+    updateViewport();
+    window.addEventListener('resize', updateViewport);
+    window.addEventListener('orientationchange', updateViewport);
+    return () => {
+      window.removeEventListener('resize', updateViewport);
+      window.removeEventListener('orientationchange', updateViewport);
+    };
+  }, []);
+
+  // Listen to standard & WebKit fullscreen state changes and keep orientation synchronized
+  useEffect(() => {
+    const getFsElement = () =>
+      document.fullscreenElement ||
+      (document as Document & { webkitFullscreenElement?: Element | null }).webkitFullscreenElement ||
+      null;
+
     const onFsChange = () => {
-      setIsFullscreen(Boolean(document.fullscreenElement));
+      const fsActive = Boolean(getFsElement());
+      setIsFullscreen(fsActive);
+      if (!fsActive) {
+        setPseudoFullscreen(false);
+        unlockOrientation();
+      }
     };
     document.addEventListener('fullscreenchange', onFsChange);
-    return () => document.removeEventListener('fullscreenchange', onFsChange);
-  }, []);
+    document.addEventListener('webkitfullscreenchange', onFsChange);
+    return () => {
+      document.removeEventListener('fullscreenchange', onFsChange);
+      document.removeEventListener('webkitfullscreenchange', onFsChange);
+    };
+  }, [unlockOrientation]);
+
+  useEffect(() => {
+    if (effectiveFullscreen) {
+      void lockOrientationForPlayer(isShort);
+    } else {
+      unlockOrientation();
+    }
+  }, [effectiveFullscreen, isShort, lockOrientationForPlayer, unlockOrientation]);
+
+  useEffect(() => {
+    if (!pseudoFullscreen) return;
+    let pushed = false;
+    let closedByPop = false;
+    try {
+      window.history.pushState(
+        {
+          ...(typeof window.history.state === 'object' && window.history.state
+            ? window.history.state
+            : {}),
+          azadariFullscreen: true,
+        },
+        '',
+        window.location.href
+      );
+      pushed = true;
+    } catch {
+      // ignore history errors
+    }
+
+    const onPopState = () => {
+      if (pushed) {
+        closedByPop = true;
+        pushed = false;
+        setPseudoFullscreen(false);
+        unlockOrientation();
+      }
+    };
+
+    window.addEventListener('popstate', onPopState);
+    return () => {
+      window.removeEventListener('popstate', onPopState);
+      if (
+        pushed &&
+        !closedByPop &&
+        typeof window.history.state === 'object' &&
+        window.history.state?.azadariFullscreen
+      ) {
+        window.history.back();
+      }
+    };
+  }, [pseudoFullscreen, unlockOrientation]);
+
+  useEffect(() => {
+    return () => {
+      unlockOrientation();
+    };
+  }, [unlockOrientation]);
 
   const syncAvailableQualities = useCallback((p: YTPlayerInstance) => {
     try {
@@ -761,21 +899,60 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   );
 
   const handleToggleFullscreen = useCallback(async () => {
-    const el = containerRef.current;
+    const el = containerRef.current as
+      | (HTMLDivElement & { webkitRequestFullscreen?: () => Promise<void> | void })
+      | null;
     if (!el) return;
+
+    const docWithWebkit = document as Document & {
+      webkitFullscreenElement?: Element | null;
+      webkitExitFullscreen?: () => Promise<void> | void;
+    };
+    const activeFsEl = document.fullscreenElement || docWithWebkit.webkitFullscreenElement;
+
+    if (activeFsEl || pseudoFullscreen) {
+      if (document.fullscreenElement) {
+        try {
+          await document.exitFullscreen();
+        } catch {
+          // ignore exit errors
+        }
+      } else if (docWithWebkit.webkitFullscreenElement && docWithWebkit.webkitExitFullscreen) {
+        try {
+          await docWithWebkit.webkitExitFullscreen();
+        } catch {
+          // ignore webkit exit errors
+        }
+      }
+      setPseudoFullscreen(false);
+      unlockOrientation();
+      return;
+    }
+
     try {
-      if (!document.fullscreenElement) {
-        await el.requestFullscreen();
-      } else {
-        await document.exitFullscreen();
+      if (typeof el.requestFullscreen === 'function') {
+        await el.requestFullscreen({ navigationUI: 'hide' }).catch(() => el.requestFullscreen());
+        await lockOrientationForPlayer(isShort);
+        return;
+      }
+      if (typeof el.webkitRequestFullscreen === 'function') {
+        await el.webkitRequestFullscreen();
+        await lockOrientationForPlayer(isShort);
+        return;
       }
     } catch {
-      // ignore unsupported fullscreen errors in restricted iframes
+      // Fallback to viewport-filling pseudo-fullscreen (e.g. iOS Safari website)
     }
-  }, []);
+    setPseudoFullscreen(true);
+    await lockOrientationForPlayer(isShort);
+  }, [pseudoFullscreen, isShort, lockOrientationForPlayer, unlockOrientation]);
 
-  const getScrubRatioFromClientX = (clientX: number, target: HTMLDivElement): number => {
+  const getScrubRatioFromPointer = (clientX: number, clientY: number, target: HTMLDivElement): number => {
     const rect = target.getBoundingClientRect();
+    if (pseudoRotateLandscape) {
+      if (rect.height <= 0) return 0;
+      return Math.max(0, Math.min(1, (clientY - rect.top) / rect.height));
+    }
     if (rect.width <= 0) return 0;
     return Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
   };
@@ -783,7 +960,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   const handleScrubPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.pointerType === 'mouse' && e.button !== 0) return;
     e.stopPropagation();
-    const ratio = getScrubRatioFromClientX(e.clientX, e.currentTarget);
+    const ratio = getScrubRatioFromPointer(e.clientX, e.clientY, e.currentTarget);
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -801,7 +978,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   };
 
   const handleScrubPointerMove = (e: React.PointerEvent<HTMLDivElement>) => {
-    const ratio = getScrubRatioFromClientX(e.clientX, e.currentTarget);
+    const ratio = getScrubRatioFromPointer(e.clientX, e.clientY, e.currentTarget);
     if (duration > 0) {
       setSeekPreview({ ratio, time: ratio * duration });
     }
@@ -815,7 +992,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
   const finishScrub = (e: React.PointerEvent<HTMLDivElement>) => {
     if (!isScrubbing) return;
-    const ratio = getScrubRatioFromClientX(e.clientX, e.currentTarget);
+    const ratio = getScrubRatioFromPointer(e.clientX, e.clientY, e.currentTarget);
     try {
       if (e.currentTarget.hasPointerCapture(e.pointerId)) {
         e.currentTarget.releasePointerCapture(e.pointerId);
@@ -869,6 +1046,10 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     } else if (e.key.toLowerCase() === 'f') {
       e.preventDefault();
       handleToggleFullscreen();
+    } else if (e.key === 'Escape' && pseudoFullscreen) {
+      e.preventDefault();
+      setPseudoFullscreen(false);
+      unlockOrientation();
     }
   };
 
@@ -907,9 +1088,15 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     return formatQualityLabel(selectedQuality, true);
   }, [selectedQuality, actualQuality]);
 
-  const frameSizeClasses = isShort
-    ? 'aspect-[9/16] w-full max-w-[360px] sm:max-w-[400px] max-h-[78vh] mx-auto'
-    : 'aspect-video w-full';
+  const frameSizeClasses = pseudoRotateLandscape
+    ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 z-[60] w-[100dvh] h-[100vw]'
+    : pseudoFullscreen
+      ? 'fixed inset-0 z-[60] w-screen h-[100dvh]'
+      : isFullscreen
+        ? 'w-full h-full'
+        : isShort
+          ? 'aspect-[9/16] w-full max-w-[360px] sm:max-w-[400px] max-h-[78vh] mx-auto'
+          : 'aspect-video w-full';
 
   return (
     <div
@@ -924,7 +1111,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           setHudVisible(false);
         }
       }}
-      className={`@container group/player relative ${frameSizeClasses} bg-black overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] ${className}`}
+      className={`@container group/player ${pseudoFullscreen || pseudoRotateLandscape ? '' : 'relative'} ${frameSizeClasses} bg-black overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] ${className}`}
     >
       {/* 1A. Direct HTML5 Media Engine (if stream URL supplied) */}
       {started && mediaUrl && (
@@ -1022,7 +1209,9 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           }}
           onDoubleClick={(e) => {
             const rect = e.currentTarget.getBoundingClientRect();
-            const isLeftHalf = e.clientX - rect.left < rect.width / 2;
+            const isLeftHalf = pseudoRotateLandscape
+              ? e.clientY - rect.top < rect.height / 2
+              : e.clientX - rect.left < rect.width / 2;
             handleSkipBy(isLeftHalf ? -10 : 10);
           }}
           className="absolute inset-0 z-10"
@@ -1493,11 +1682,11 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
             <button
               type="button"
               onClick={handleToggleFullscreen}
-              aria-label={isFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
-              title={isFullscreen ? 'Fullscreen (F)' : 'Fullscreen (F)'}
+              aria-label={effectiveFullscreen ? 'Exit fullscreen' : 'Fullscreen'}
+              title={effectiveFullscreen ? 'Exit fullscreen (F)' : 'Fullscreen (F)'}
               className="p-1 @[580px]:p-1.5 rounded-full hover:bg-white/15 cursor-pointer"
             >
-              {isFullscreen ? (
+              {effectiveFullscreen ? (
                 <Minimize className="w-4 h-4 @[580px]:w-5 @[580px]:h-5" />
               ) : (
                 <Maximize className="w-4 h-4 @[580px]:w-5 @[580px]:h-5" />

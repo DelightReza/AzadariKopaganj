@@ -5,7 +5,7 @@
   "channel_url": "https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA",
   "rss_url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCyCIC43pbujKarf1irIjtrA",
   "live_url": "https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA/live",
-  "last_updated": "2026-11-17T02:48:43Z",
+  "last_updated": "2026-11-17T12:50:08Z",
   "endpoints": {
     "live": "assets/livenow.json",
     "videos_month_template": "assets/{yyyy}/{mm}/videos.json",
@@ -197,6 +197,24 @@
   ],
   "latest_video_id": "soZ1T_EVT3o",
   "latest_video_title": "Majalis e Ummul Masaeb | 2nd Majlis | Maulana S Nadeem Asghar sb | Kopaganj Mau | Aza e Fatimiya",
+  "popular_video_ids": [
+    "XeTU7F7JCBs",
+    "3lP3EZr7MPs",
+    "V-mkvsnWupQ",
+    "jH62Hr8uM94",
+    "6V0VZVmMnAo",
+    "ZJYze0oLpBw",
+    "tJXLd2dQ4DQ",
+    "buyTtoZVv-0",
+    "YCnZP16KhaU",
+    "Cbf1tDYWDbA",
+    "hmpv4JZsBmI",
+    "mdnGyvd_iW0",
+    "lYhkbpQSfcA",
+    "Yl7y6kay_ek",
+    "P72pYvRdN2A",
+    "foA2ZkGkIo4"
+  ],
   "is_live": false,
   "available_months": [
     {

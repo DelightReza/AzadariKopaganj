@@ -48,6 +48,8 @@ export const PostImageLightbox: React.FC<PostImageLightboxProps> = ({
   const dragStartRef = useRef<{ x: number; y: number; active: boolean; moved: boolean } | null>(null);
   const panOriginRef = useRef<{ x: number; y: number }>({ x: 0, y: 0 });
   const ignoreBackdropClickRef = useRef<boolean>(false);
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   useEffect(() => {
     if (!isOpen) return;
@@ -85,10 +87,31 @@ export const PostImageLightbox: React.FC<PostImageLightboxProps> = ({
     const prevOverflow = document.body.style.overflow;
     document.body.style.overflow = 'hidden';
 
+    let closedByPopState = false;
+    let pushedEntry = false;
+    try {
+      window.history.pushState(
+        { ...(typeof window.history.state === 'object' && window.history.state ? window.history.state : {}), azadariLightbox: true },
+        '',
+        window.location.href
+      );
+      pushedEntry = true;
+    } catch {
+      // ignore history errors
+    }
+
+    const onPopState = () => {
+      if (pushedEntry) {
+        closedByPopState = true;
+        pushedEntry = false;
+        onCloseRef.current();
+      }
+    };
+
     const onKeyDown = (e: KeyboardEvent) => {
       if (e.key === 'Escape') {
         e.preventDefault();
-        onClose();
+        onCloseRef.current();
       } else if (e.key === 'ArrowLeft') {
         e.preventDefault();
         goPrev();
@@ -105,12 +128,22 @@ export const PostImageLightbox: React.FC<PostImageLightboxProps> = ({
       }
     };
 
+    window.addEventListener('popstate', onPopState);
     window.addEventListener('keydown', onKeyDown);
     return () => {
       document.body.style.overflow = prevOverflow;
+      window.removeEventListener('popstate', onPopState);
       window.removeEventListener('keydown', onKeyDown);
+      if (
+        pushedEntry &&
+        !closedByPopState &&
+        typeof window.history.state === 'object' &&
+        window.history.state?.azadariLightbox
+      ) {
+        window.history.back();
+      }
     };
-  }, [isOpen, onClose, goPrev, goNext]);
+  }, [isOpen, goPrev, goNext]);
 
   if (!isOpen || total === 0) return null;
 

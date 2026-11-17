@@ -1,12 +1,12 @@
 import React, { useState } from 'react';
 import {
+  ArrowLeft,
   Check,
   CheckCircle2,
   ExternalLink,
   Maximize2,
   Minimize2,
   Radio,
-  RefreshCw,
   Share2,
 } from 'lucide-react';
 import type { AppConfig, LiveNowState, VideoItem } from '../types/archive';
@@ -29,8 +29,8 @@ interface TheatrePlayerSectionProps {
   onSelectQueueMonth: (monthKey: string) => void;
   isPlayingLive: boolean;
   onSelectLiveStream: () => void;
-  onRefreshFeed: () => void;
-  isRefreshing: boolean;
+  onBack?: () => void;
+  backLabel?: string;
 }
 
 export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
@@ -43,8 +43,8 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
   onSelectQueueMonth,
   isPlayingLive,
   onSelectLiveStream,
-  onRefreshFeed,
-  isRefreshing,
+  onBack,
+  backLabel = 'Back',
 }) => {
   const [theaterWide, setTheaterWide] = useState<boolean>(false);
   const [copiedLink, setCopiedLink] = useState<boolean>(false);
@@ -108,7 +108,19 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
       )}
 
       {/* Watch Layout */}
-      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-4">
+      <div className="max-w-[1600px] mx-auto px-3 sm:px-6 pt-3 sm:pt-4">
+        {onBack && (
+          <div className="mb-2.5 flex items-center">
+            <button
+              type="button"
+              onClick={onBack}
+              className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-white dark:bg-[#17171D] text-[#0F0F12] dark:text-[#F3F3F6] border border-black/[0.08] dark:border-white/[0.1] hover:bg-[#EFEFF2] dark:hover:bg-[#23232B] text-xs font-semibold shadow-xs transition-colors cursor-pointer"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>{backLabel}</span>
+            </button>
+          </div>
+        )}
         <div className="flex flex-col lg:flex-row gap-6 items-start">
           {/* Primary Watch Column */}
           <div className={theaterWide ? 'w-full' : 'w-full lg:flex-1 min-w-0'}>
@@ -186,7 +198,7 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
                 </div>
               </div>
 
-              {/* Right: Share + YouTube + Refresh + Theater Mode */}
+              {/* Right: Share + YouTube + Theater Mode */}
               <div className="flex flex-wrap items-center gap-2">
                 <button
                   type="button"
@@ -215,16 +227,6 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
                   <span>YouTube</span>
                   <ExternalLink className="w-3.5 h-3.5" />
                 </a>
-
-                <button
-                  type="button"
-                  onClick={onRefreshFeed}
-                  disabled={isRefreshing}
-                  className="h-9 px-3.5 text-xs sm:text-sm font-medium rounded-full bg-white dark:bg-[#17171D] text-[#0F0F12] dark:text-[#F3F3F6] border border-black/[0.08] dark:border-white/[0.1] hover:bg-[#EFEFF2] dark:hover:bg-[#23232B] inline-flex items-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-                >
-                  <RefreshCw className={`w-3.5 h-3.5 ${isRefreshing ? 'animate-spin' : ''}`} />
-                  <span>Refresh</span>
-                </button>
 
                 <button
                   type="button"

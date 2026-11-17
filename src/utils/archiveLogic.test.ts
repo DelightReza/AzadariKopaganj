@@ -19,6 +19,7 @@ import {
   toUncroppedPostImageUrl,
 } from './archiveLogic';
 import { formatPlayerTime, formatQualityLabel } from './youtubePlayerApi';
+import { buildAppHash, DEFAULT_APP_ROUTE, parseAppRoute } from './appRouting';
 
 test('resolveEndpointTemplate replaces {yyyy} and zero-pads {mm}', () => {
   assert.equal(
@@ -332,3 +333,30 @@ test('getPostImages and toUncroppedPostImageUrl strip 1:1 fcrop64 square crop pa
 
   assert.deepEqual(getPostImages({ image_url: '' }), []);
 });
+
+test('parseAppRoute and buildAppHash preserve tabs, watch videos, and filters across refresh', () => {
+  assert.deepEqual(parseAppRoute(''), DEFAULT_APP_ROUTE);
+  assert.deepEqual(parseAppRoute('#/'), DEFAULT_APP_ROUTE);
+
+  const videosRoute = parseAppRoute('#/videos?topic=majlis&month=2026-10&q=kopaganj');
+  assert.equal(videosRoute.section, 'videos');
+  assert.equal(videosRoute.watching, false);
+  assert.equal(videosRoute.videoTopic, 'majlis');
+  assert.equal(videosRoute.videoMonth, '2026-10');
+  assert.equal(videosRoute.searchQuery, 'kopaganj');
+
+  const watchRoute = parseAppRoute('#/watch/GOOvPNTUmtg?from=posts&pmonth=2026-09');
+  assert.equal(watchRoute.watching, true);
+  assert.equal(watchRoute.watchId, 'GOOvPNTUmtg');
+  assert.equal(watchRoute.isLiveStream, false);
+  assert.equal(watchRoute.section, 'posts');
+  assert.equal(watchRoute.postMonth, '2026-09');
+  assert.equal(buildAppHash(watchRoute), '#/watch/GOOvPNTUmtg?from=posts&pmonth=2026-09');
+
+  const liveWatch = parseAppRoute('#/watch/live?from=live');
+  assert.equal(liveWatch.watching, true);
+  assert.equal(liveWatch.isLiveStream, true);
+  assert.equal(liveWatch.section, 'live');
+  assert.equal(buildAppHash(liveWatch), '#/watch/live?from=live');
+});
+

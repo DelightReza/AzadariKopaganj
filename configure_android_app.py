@@ -178,18 +178,42 @@ def update_android_manifest(manifest_path: Path) -> None:
 
 
 def install_background_sync_sources(android_dir: Path) -> None:
-    src_java_dir = Path("android-native/java/com/azadari/kopaganj")
-    if not src_java_dir.is_dir():
-        print(f"[configure_android_app] Warning: {src_java_dir} not found; skipping native worker copy")
+    src_kotlin_dir = Path("android-native/kotlin/com/azadari/kopaganj")
+    if not src_kotlin_dir.is_dir():
+        print(f"[configure_android_app] Warning: {src_kotlin_dir} not found; skipping native worker copy")
         return
 
-    dest_java_dir = android_dir / "app" / "src" / "main" / "java" / "com" / "azadari" / "kopaganj"
-    dest_java_dir.mkdir(parents=True, exist_ok=True)
+    dest_kotlin_dir = android_dir / "app" / "src" / "main" / "java" / "com" / "azadari" / "kopaganj"
+    dest_kotlin_dir.mkdir(parents=True, exist_ok=True)
     copied = []
-    for java_file in sorted(src_java_dir.glob("*.java")):
-        shutil.copyfile(java_file, dest_java_dir / java_file.name)
-        copied.append(java_file.name)
-    print(f"[configure_android_app] Installed native Android sync classes into {dest_java_dir}: {', '.join(copied)}")
+    for kotlin_file in sorted(src_kotlin_dir.glob("*.kt")):
+        shutil.copyfile(kotlin_file, dest_kotlin_dir / kotlin_file.name)
+        copied.append(kotlin_file.name)
+    print(f"[configure_android_app] Installed native Kotlin sync classes into {dest_kotlin_dir}: {', '.join(copied)}")
+
+
+def enable_kotlin(android_dir: Path, app_build_gradle: Path) -> None:
+    if app_build_gradle.is_file():
+        text = app_build_gradle.read_text(encoding="utf-8")
+        if "org.jetbrains.kotlin.android" not in text:
+            if re.search(r"plugins\s*\{", text):
+                text = re.sub(
+                    r"(plugins\s*\{)",
+                    r"\1\n    id 'org.jetbrains.kotlin.android'",
+                    text,
+                    count=1,
+                )
+            else:
+                text = "apply plugin: 'org.jetbrains.kotlin.android'\n" + text
+            app_build_gradle.write_text(text, encoding="utf-8")
+
+    root_gradle = android_dir / "build.gradle"
+    if root_gradle.is_file():
+        text = root_gradle.read_text(encoding="utf-8")
+        if "org.jetbrains.kotlin.android" not in text:
+            insertion = "        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.0'\n"
+            text = re.sub(r"(dependencies\s*\{\n)", rf"\1{insertion}", text, count=1)
+            root_gradle.write_text(text, encoding="utf-8")
 
 
 def update_build_gradle(app_build_gradle: Path) -> None:
@@ -250,7 +274,9 @@ def main() -> None:
     update_notification_icon(res_dir)
     update_android_manifest(android_dir / "app" / "src" / "main" / "AndroidManifest.xml")
     install_background_sync_sources(android_dir)
-    update_build_gradle(android_dir / "app" / "build.gradle")
+    app_build_gradle = android_dir / "app" / "build.gradle"
+    enable_kotlin(android_dir, app_build_gradle)
+    update_build_gradle(app_build_gradle)
 
 
 if __name__ == "__main__":

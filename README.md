@@ -38,7 +38,7 @@ Official zero-API, zero-login video archive, live broadcast portal, Progressive 
 | `src/services/notificationSyncService.ts` | Manages APK startup permission checks, native `AzadariBackgroundSync` bridge calls, snapshot synchronization, and foreground alerts. |
 | `src/utils/appRouting.ts` | Parses and serializes hash routes and filter query parameters. |
 | `src/utils/archiveLogic.ts` | Video/post filtering, topic matching, Short detection, feed diffing (`detectFeedUpdates`), and uncropped community post image helpers. |
-| `android-native/java/com/azadari/kopaganj/` | Native Android `ConfigSyncWorker`, `AzadariNotificationHelper`, `AzadariBackgroundSyncPlugin`, and `MainActivity`. |
+| `android-native/kotlin/com/azadari/kopaganj/` | Native Kotlin Android `ConfigSyncWorker`, `AzadariNotificationHelper`, `AzadariBackgroundSyncPlugin`, and `MainActivity`. |
 | `configure_android_app.py` | Configures the generated Capacitor `android/` project with app metadata, adaptive icons, monochrome notification drawable (`ic_stat_azadari`), manifest permissions, WorkManager dependency, native Java sources, and release signing config. |
 
 ---
@@ -105,11 +105,11 @@ Configure the following secrets in **Repository Settings → Secrets and variabl
 │   ├── build_android_apk.yml     # Signed APK & AAB build + GitHub Release workflow
 │   ├── deploy_pages.yml          # GitHub Pages static deployment workflow
 │   └── update_videos.yml         # Scheduled YouTube channel manifest sync
-├── android-native/java/com/azadari/kopaganj/
-│   ├── AzadariBackgroundSyncPlugin.java
-│   ├── AzadariNotificationHelper.java
-│   ├── ConfigSyncWorker.java     # Hourly Android WorkManager background sync
-│   └── MainActivity.java
+├── android-native/kotlin/com/azadari/kopaganj/
+│   ├── AzadariBackgroundSyncPlugin.kt
+│   ├── AzadariNotificationHelper.kt
+│   ├── ConfigSyncWorker.kt     # Hourly Android WorkManager background sync
+│   └── MainActivity.kt
 ├── assets/                       # livenow.json and monthly YYYY/MM/{videos,post}.json
 ├── public/                       # Static logos, adaptive icon XML, and PWA icons
 ├── src/

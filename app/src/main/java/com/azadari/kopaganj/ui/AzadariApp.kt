@@ -213,14 +213,14 @@ fun AzadariApp() {
                     }
                 }
             }
-            playerVideoId?.let { videoId ->
-                InbuiltPlayerDialog(
-                    videoId = videoId,
-                    title = playerTitle,
-                    onDismiss = { playerVideoId = null }
-                )
-            }
         }
+    }
+    playerVideoId?.let { videoId ->
+        InbuiltPlayerDialog(
+            videoId = videoId,
+            title = playerTitle,
+            onDismiss = { playerVideoId = null }
+        )
     }
 }
 

@@ -81,8 +81,22 @@ jobs:
           APKSIGNER="$BUILD_TOOLS_DIR/apksigner"
           RAW_APK="app/build/outputs/apk/release/app-release.apk"
           mkdir -p dist-apk
-          "$ZIPALIGN" -p -f 4 "$RAW_APK" "dist-apk/Azadari-Kopaganj-$INPUT_VERSION_NAME.apk"
-          "$APKSIGNER" verify --verbose --print-certs "dist-apk/Azadari-Kopaganj-$INPUT_VERSION_NAME.apk"
+          ALIGNED_APK="$RUNNER_TEMP/Azadari-Kopaganj-$INPUT_VERSION_NAME-aligned.apk"
+          SIGNED_APK="dist-apk/Azadari-Kopaganj-$INPUT_VERSION_NAME.apk"
+          "$ZIPALIGN" -p -f 4 "$RAW_APK" "$ALIGNED_APK"
+          "$APKSIGNER" sign \
+            --ks "$RELEASE_STORE_FILE" \
+            --ks-pass "pass:$RELEASE_STORE_PASSWORD" \
+            --ks-key-alias "$RELEASE_KEY_ALIAS" \
+            --key-pass "pass:$RELEASE_KEY_PASSWORD" \
+            --v1-signing-enabled true \
+            --v2-signing-enabled true \
+            --v3-signing-enabled true \
+            --v4-signing-enabled false \
+            --out "$SIGNED_APK" \
+            "$ALIGNED_APK"
+          rm -f "$ALIGNED_APK"
+          "$APKSIGNER" verify --verbose --print-certs "$SIGNED_APK"
 
       - name: Upload signed APK
         uses: actions/upload-artifact@v4

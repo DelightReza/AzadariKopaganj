@@ -37,10 +37,10 @@ class MainActivity : ComponentActivity() {
                 AzadariApp()
             }
         }
+    }
 
-        override fun onNewIntent(intent: android.content.Intent) {
-            super.onNewIntent(intent)
-            pendingRoute = intent.getStringExtra(AzadariNotifications.EXTRA_ROUTE)
-        }
+    override fun onNewIntent(intent: android.content.Intent) {
+        super.onNewIntent(intent)
+        pendingRoute = intent.getStringExtra(AzadariNotifications.EXTRA_ROUTE)
     }
 }

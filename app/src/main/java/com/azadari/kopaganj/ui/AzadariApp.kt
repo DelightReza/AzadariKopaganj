@@ -2,6 +2,10 @@ package com.azadari.kopaganj.ui
 
 import android.content.Intent
 import android.net.Uri
+import android.webkit.WebChromeClient
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -13,6 +17,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -35,6 +40,8 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -50,6 +57,8 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.DialogProperties
 import coil.compose.AsyncImage
 import com.azadari.kopaganj.data.ArchiveRepository
 import com.azadari.kopaganj.data.ArchiveSnapshot
@@ -63,20 +72,31 @@ private enum class AppTab(val label: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun AzadariApp() {
-    val repository = remember { ArchiveRepository() }
+    val context = LocalContext.current.applicationContext
+    val repository = remember(context) { ArchiveRepository(context) }
     var snapshot by remember { mutableStateOf<ArchiveSnapshot?>(null) }
     var error by remember { mutableStateOf<String?>(null) }
-    var loading by remember { mutableStateOf(true) }
+    var loading by remember { mutableStateOf(false) }
     var tab by remember { mutableIntStateOf(0) }
     var query by remember { mutableStateOf("") }
     var reloadKey by remember { mutableIntStateOf(0) }
+    var playerVideoId by remember { mutableStateOf<String?>(null) }
+    var playerTitle by remember { mutableStateOf("") }
 
     suspend fun reload() {
-        loading = true
+        val cached = repository.loadCached()
+        if (cached != null) {
+            snapshot = cached
+            loading = false
+        } else {
+            loading = true
+        }
         error = null
         runCatching { repository.load() }.fold(
             { snapshot = it },
-            { error = it.message ?: "Could not load archive" }
+            {
+                if (snapshot == null) error = it.message ?: "Could not load archive"
+            }
         )
         loading = false
     }
@@ -111,6 +131,14 @@ fun AzadariApp() {
                     )
                 }
             }
+
+            playerVideoId?.let { videoId ->
+                InbuiltPlayerDialog(
+                    videoId = videoId,
+                    title = playerTitle,
+                    onDismiss = { playerVideoId = null }
+                )
+            }
         }
     ) { padding ->
         when {
@@ -144,26 +172,49 @@ fun AzadariApp() {
                     }
                     when (tab) {
                         0 -> {
-                            if (data.live.is_live) item { LiveCard(data.live.title, data.live.youtube_id) }
+                            if (data.live.is_live) item {
+                                LiveCard(data.live.title, data.live.youtube_id) { id, title ->
+                                    playerVideoId = id
+                                    playerTitle = title
+                                }
+                            }
                             item { SectionTitle("Recent Videos") }
-                            items(data.videos.take(20)) { video -> VideoCard(video) }
+                            items(data.videos.take(20)) { video ->
+                                VideoCard(video) { id, title ->
+                                    playerVideoId = id
+                                    playerTitle = title
+                                }
+                            }
                         }
                         1 -> {
                             item {
-                                if (data.live.is_live) LiveCard(data.live.title, data.live.youtube_id)
+                                if (data.live.is_live) LiveCard(data.live.title, data.live.youtube_id) { id, title ->
+                                    playerVideoId = id
+                                    playerTitle = title
+                                }
                                 else Card(
                                     modifier = Modifier.fillMaxWidth(),
                                     colors = CardDefaults.cardColors()
                                 ) { Text("No live broadcast currently.", modifier = Modifier.padding(20.dp)) }
                             }
                             item { SectionTitle("Live Archive") }
-                            items(data.videos.filter { it.is_stream }.take(30)) { video -> VideoCard(video) }
+                            items(data.videos.filter { it.is_stream }.take(30)) { video ->
+                                VideoCard(video) { id, title ->
+                                    playerVideoId = id
+                                    playerTitle = title
+                                }
+                            }
                         }
                         2 -> {
                             val filtered = data.videos.filter {
                                 query.isBlank() || it.title.contains(query, ignoreCase = true)
                             }
-                            items(filtered) { video -> VideoCard(video) }
+                            items(filtered) { video ->
+                                VideoCard(video) { id, title ->
+                                    playerVideoId = id
+                                    playerTitle = title
+                                }
+                            }
                         }
                         3 -> items(data.posts) { post -> PostCard(post) }
                     }
@@ -182,14 +233,9 @@ private fun SectionTitle(title: String) {
 }
 
 @Composable
-private fun LiveCard(title: String, youtubeId: String) {
-    val context = LocalContext.current
+private fun LiveCard(title: String, youtubeId: String, onPlay: (String, String) -> Unit) {
     Card(
-        onClick = {
-            val url = if (youtubeId.isNotBlank()) "https://www.youtube.com/watch?v=$youtubeId"
-            else "https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA/live"
-            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
-        },
+        onClick = { onPlay(youtubeId, title.ifBlank { "Azadari Kopaganj Live" }) },
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer
@@ -207,14 +253,9 @@ private fun LiveCard(title: String, youtubeId: String) {
 }
 
 @Composable
-private fun VideoCard(video: VideoItem) {
-    val context = LocalContext.current
+private fun VideoCard(video: VideoItem, onPlay: (String, String) -> Unit) {
     Card(
-        onClick = {
-            context.startActivity(
-                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${video.videoId}"))
-            )
-        },
+        onClick = { onPlay(video.videoId, video.title) },
         modifier = Modifier.fillMaxWidth()
     ) {
         Column {
@@ -286,6 +327,69 @@ private fun PostCard(post: CommunityPost) {
                     overflow = TextOverflow.Ellipsis
                 )
             }
+        }
+
+        @Composable
+        private fun InbuiltPlayerDialog(
+            videoId: String,
+            title: String,
+            onDismiss: () -> Unit
+        ) {
+            AlertDialog(
+                onDismissRequest = onDismiss,
+                confirmButton = {
+                    TextButton(onClick = onDismiss) { Text("Close") }
+                },
+                title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+                text = {
+                    Column(Modifier.fillMaxWidth()) {
+                        AndroidView(
+                            factory = { context ->
+                                WebView(context).apply {
+                                    settings.javaScriptEnabled = true
+                                    settings.domStorageEnabled = true
+                                    settings.mediaPlaybackRequiresUserGesture = false
+                                    settings.loadWithOverviewMode = true
+                                    settings.useWideViewPort = true
+                                    webChromeClient = WebChromeClient()
+                                    webViewClient = WebViewClient()
+                                    isFocusable = true
+                                    loadDataWithBaseURL(
+                                        "https://www.youtube.com",
+                                        """
+                                        <!doctype html>
+                                        <html>
+                                          <head>
+                                            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                                            <style>
+                                              html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}
+                                              iframe{width:100%;height:100%;border:0}
+                                            </style>
+                                          </head>
+                                          <body>
+                                            <iframe
+                                              src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&rel=0"
+                                              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                              allowfullscreen></iframe>
+                                          </body>
+                                        </html>
+                                        """.trimIndent(),
+                                        "text/html",
+                                        "utf-8",
+                                        null
+                                    )
+                                }
+                            },
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(16f / 9f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(androidx.compose.ui.graphics.Color.Black)
+                        )
+                    }
+                },
+                properties = DialogProperties(usePlatformDefaultWidth = false)
+            )
         }
     }
 }

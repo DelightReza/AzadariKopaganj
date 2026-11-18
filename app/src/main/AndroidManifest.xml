@@ -8,6 +8,8 @@
         android:label="@string/app_name"
         android:roundIcon="@drawable/ic_launcher"
         android:supportsRtl="true"
+        android:usesCleartextTraffic="false"
+        android:hardwareAccelerated="true"
         android:theme="@style/Theme.Azadari">
         <activity
             android:name=".MainActivity"

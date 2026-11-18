@@ -7,17 +7,37 @@ android {
     namespace = "com.azadari.kopaganj"
     compileSdk = 35
 
+    val appVersionName = providers.gradleProperty("versionName").orElse("1.0.0").get()
+    val appVersionCode = providers.gradleProperty("versionCode").orElse("1").get().toInt()
+
     defaultConfig {
         applicationId = "com.azadari.kopaganj"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0.0"
+        versionCode = appVersionCode
+        versionName = appVersionName
+    }
+
+    val releaseStoreFile = System.getenv("RELEASE_STORE_FILE")
+    val releaseStorePassword = System.getenv("RELEASE_STORE_PASSWORD")
+    val releaseKeyAlias = System.getenv("RELEASE_KEY_ALIAS")
+    val releaseKeyPassword = System.getenv("RELEASE_KEY_PASSWORD")
+
+    signingConfigs {
+        create("release") {
+            if (!releaseStoreFile.isNullOrBlank()) {
+                storeFile = file(releaseStoreFile)
+                storePassword = releaseStorePassword
+                keyAlias = releaseKeyAlias
+                keyPassword = releaseKeyPassword
+            }
+        }
     }
 
     buildTypes {
         release {
             isMinifyEnabled = false
+            signingConfig = signingConfigs.getByName("release")
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"

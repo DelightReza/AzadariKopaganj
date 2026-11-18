@@ -132,13 +132,6 @@ fun AzadariApp() {
                 }
             }
 
-            playerVideoId?.let { videoId ->
-                InbuiltPlayerDialog(
-                    videoId = videoId,
-                    title = playerTitle,
-                    onDismiss = { playerVideoId = null }
-                )
-            }
         }
     ) { padding ->
         when {
@@ -219,6 +212,13 @@ fun AzadariApp() {
                         3 -> items(data.posts) { post -> PostCard(post) }
                     }
                 }
+            }
+            playerVideoId?.let { videoId ->
+                InbuiltPlayerDialog(
+                    videoId = videoId,
+                    title = playerTitle,
+                    onDismiss = { playerVideoId = null }
+                )
             }
         }
     }
@@ -328,68 +328,68 @@ private fun PostCard(post: CommunityPost) {
                 )
             }
         }
-
-        @Composable
-        private fun InbuiltPlayerDialog(
-            videoId: String,
-            title: String,
-            onDismiss: () -> Unit
-        ) {
-            AlertDialog(
-                onDismissRequest = onDismiss,
-                confirmButton = {
-                    TextButton(onClick = onDismiss) { Text("Close") }
-                },
-                title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-                text = {
-                    Column(Modifier.fillMaxWidth()) {
-                        AndroidView(
-                            factory = { context ->
-                                WebView(context).apply {
-                                    settings.javaScriptEnabled = true
-                                    settings.domStorageEnabled = true
-                                    settings.mediaPlaybackRequiresUserGesture = false
-                                    settings.loadWithOverviewMode = true
-                                    settings.useWideViewPort = true
-                                    webChromeClient = WebChromeClient()
-                                    webViewClient = WebViewClient()
-                                    isFocusable = true
-                                    loadDataWithBaseURL(
-                                        "https://www.youtube.com",
-                                        """
-                                        <!doctype html>
-                                        <html>
-                                          <head>
-                                            <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-                                            <style>
-                                              html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}
-                                              iframe{width:100%;height:100%;border:0}
-                                            </style>
-                                          </head>
-                                          <body>
-                                            <iframe
-                                              src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&rel=0"
-                                              allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                                              allowfullscreen></iframe>
-                                          </body>
-                                        </html>
-                                        """.trimIndent(),
-                                        "text/html",
-                                        "utf-8",
-                                        null
-                                    )
-                                }
-                            },
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .aspectRatio(16f / 9f)
-                                .clip(RoundedCornerShape(12.dp))
-                                .background(androidx.compose.ui.graphics.Color.Black)
-                        )
-                    }
-                },
-                properties = DialogProperties(usePlatformDefaultWidth = false)
-            )
-        }
     }
+}
+
+@Composable
+private fun InbuiltPlayerDialog(
+    videoId: String,
+    title: String,
+    onDismiss: () -> Unit
+) {
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        confirmButton = {
+            TextButton(onClick = onDismiss) { Text("Close") }
+        },
+        title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
+        text = {
+            Column(Modifier.fillMaxWidth()) {
+                AndroidView(
+                    factory = { context ->
+                        WebView(context).apply {
+                            settings.javaScriptEnabled = true
+                            settings.domStorageEnabled = true
+                            settings.mediaPlaybackRequiresUserGesture = false
+                            settings.loadWithOverviewMode = true
+                            settings.useWideViewPort = true
+                            webChromeClient = WebChromeClient()
+                            webViewClient = WebViewClient()
+                            isFocusable = true
+                            loadDataWithBaseURL(
+                                "https://www.youtube.com",
+                                """
+                                <!doctype html>
+                                <html>
+                                  <head>
+                                    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+                                    <style>
+                                      html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}
+                                      iframe{width:100%;height:100%;border:0}
+                                    </style>
+                                  </head>
+                                  <body>
+                                    <iframe
+                                      src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&rel=0"
+                                      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
+                                      allowfullscreen></iframe>
+                                  </body>
+                                </html>
+                                """.trimIndent(),
+                                "text/html",
+                                "utf-8",
+                                null
+                            )
+                        }
+                    },
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .aspectRatio(16f / 9f)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(androidx.compose.ui.graphics.Color.Black)
+                )
+            }
+        },
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    )
 }

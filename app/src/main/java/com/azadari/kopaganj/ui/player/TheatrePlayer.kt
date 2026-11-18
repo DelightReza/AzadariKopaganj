@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.SkipNext
 import androidx.compose.material.icons.filled.SkipPrevious
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Slider
@@ -85,6 +87,8 @@ fun TheatrePlayer(
     var state by remember(videoId) { mutableStateOf(PlayerUiState(buffering = true)) }
     var fullscreen by remember { mutableStateOf(false) }
     var webView by remember { mutableStateOf<WebView?>(null) }
+    var speedMenu by remember { mutableStateOf(false) }
+    var qualityMenu by remember { mutableStateOf(false) }
 
     val bridge = remember(videoId) {
         object : Any() {
@@ -211,6 +215,40 @@ fun TheatrePlayer(
                     Text(formatTime(state.durationSeconds), color = Color.White)
                 }
                 Row {
+                    Box {
+                        androidx.compose.material3.TextButton(onClick = { speedMenu = true }) {
+                            Text("${state.speed}x", color = Color.White)
+                        }
+                        DropdownMenu(expanded = speedMenu, onDismissRequest = { speedMenu = false }) {
+                            listOf(0.75f, 1f, 1.25f, 1.5f, 2f).forEach { speed ->
+                                DropdownMenuItem(
+                                    text = { Text("${speed}x") },
+                                    onClick = {
+                                        webView?.evaluateJavascript("azadariSetSpeed($speed)", null)
+                                        state = state.copy(speed = speed)
+                                        speedMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
+                    Box {
+                        androidx.compose.material3.TextButton(onClick = { qualityMenu = true }) {
+                            Text(state.quality, color = Color.White)
+                        }
+                        DropdownMenu(expanded = qualityMenu, onDismissRequest = { qualityMenu = false }) {
+                            listOf("auto", "hd1080", "hd720", "large", "medium", "small").forEach { quality ->
+                                DropdownMenuItem(
+                                    text = { Text(quality) },
+                                    onClick = {
+                                        webView?.evaluateJavascript("azadariSetQuality('$quality')", null)
+                                        state = state.copy(quality = quality)
+                                        qualityMenu = false
+                                    }
+                                )
+                            }
+                        }
+                    }
                     if (hasPrevious) IconButton(onClick = onPrevious) {
                         Icon(Icons.Default.SkipPrevious, contentDescription = "Previous", tint = Color.White)
                     }

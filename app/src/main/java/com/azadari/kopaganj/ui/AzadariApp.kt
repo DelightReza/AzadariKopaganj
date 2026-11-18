@@ -67,6 +67,7 @@ import com.azadari.kopaganj.data.ArchiveSnapshot
 import com.azadari.kopaganj.data.CommunityPost
 import com.azadari.kopaganj.data.VideoItem
 import com.azadari.kopaganj.ui.player.TheatrePlayer
+import com.azadari.kopaganj.MainActivity
 
 private enum class AppTab(val label: String, val route: String) {
     Home("Home", "home"),
@@ -81,6 +82,15 @@ fun AzadariApp(viewModel: ArchiveViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val nav = rememberNavController()
     LaunchedEffect(Unit) { viewModel.refresh(full = true) }
+    LaunchedEffect(state.snapshot) {
+        if (state.snapshot != null) {
+            MainActivity.consumePendingRoute()?.let { route ->
+                if (route.startsWith("watch/") || route == "posts" || route == "live" || route == "videos") {
+                    nav.navigate(route) { launchSingleTop = true }
+                }
+            }
+        }
+    }
     val backEntry by nav.currentBackStackEntryAsState()
     val route = backEntry?.destination?.route.orEmpty()
     val showBars = !route.startsWith("watch/")

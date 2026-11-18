@@ -15,6 +15,12 @@ import com.azadari.kopaganj.notifications.AzadariNotifications
 import com.azadari.kopaganj.workers.ConfigSyncWorker
 
 class MainActivity : ComponentActivity() {
+    companion object {
+        @Volatile
+        var pendingRoute: String? = null
+        fun consumePendingRoute(): String? = pendingRoute.also { pendingRoute = null }
+    }
+
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -25,10 +31,16 @@ class MainActivity : ComponentActivity() {
         ) {
             ActivityCompat.requestPermissions(this, arrayOf(Manifest.permission.POST_NOTIFICATIONS), 1001)
         }
+        pendingRoute = intent?.getStringExtra(AzadariNotifications.EXTRA_ROUTE)
         setContent {
             AzadariTheme {
                 AzadariApp()
             }
+        }
+
+        override fun onNewIntent(intent: android.content.Intent) {
+            super.onNewIntent(intent)
+            pendingRoute = intent.getStringExtra(AzadariNotifications.EXTRA_ROUTE)
         }
     }
 }

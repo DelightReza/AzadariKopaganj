@@ -33,6 +33,7 @@ class ConfigSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         val prefs = applicationContext.getSharedPreferences("azadari_sync", Context.MODE_PRIVATE)
         val initialized = prefs.getBoolean("initialized", false)
         val wasLive = prefs.getBoolean("live", false)
+        val previousLiveId = prefs.getString("live_id", "")
         val liveNow = live.opt("is_live")?.asBoolean ?: config.opt("is_live")?.asBoolean ?: false
         val liveId = live.opt("youtube_id")?.asString ?: ""
         val liveTitle = live.opt("title")?.asString ?: ""
@@ -77,7 +78,7 @@ class ConfigSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
             }
         }
         if (initialized) {
-            if (liveNow && (!wasLive || liveId.isNotBlank())) {
+            if (liveNow && (!wasLive || (liveId.isNotBlank() && liveId != previousLiveId))) {
                 AzadariNotifications.show(applicationContext, AzadariNotifications.LIVE, liveId.hashCode(), "Live Now: Azadari Kopaganj", liveTitle.ifBlank { "Live broadcast started." }, "watch/live")
             }
             videoSamples.filter { it.first !in previousVideos }.take(3).forEach { (id, title) ->
@@ -90,6 +91,7 @@ class ConfigSyncWorker(context: Context, params: WorkerParameters) : CoroutineWo
         prefs.edit()
             .putBoolean("initialized", true)
             .putBoolean("live", liveNow)
+            .putString("live_id", liveId)
             .putStringSet("videos", (videoIds + previousVideos).take(1500).toSet())
             .putStringSet("posts", (postIds + previousPosts).take(1500).toSet())
             .apply()

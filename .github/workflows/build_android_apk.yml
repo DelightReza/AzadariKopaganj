@@ -180,9 +180,7 @@ jobs:
           tag_name: v${{ github.event.inputs.version_name || '1.0.0' }}
           name: "Azadari Kopaganj v${{ github.event.inputs.version_name || '1.0.0' }}"
           body: |
-            Official signed Android release for **Azadari Kopaganj** (`com.azadari.kopaganj`).
-
-            Download the `.apk` file. The `.aab` bundle is not installable directly on Android phones.
+            Azadari Kopaganj Application
           files: |
             dist-apk/Azadari-Kopaganj.apk
           prerelease: false

@@ -1,9 +1,10 @@
 package com.azadari.kopaganj.data
 
-import com.google.gson.annotations.SerializedName
-
 data class AppConfig(
     val channel_name: String = "",
+    val channel_id: String = "",
+    val channel_url: String = "",
+    val live_url: String = "",
     val latest_video_id: String = "",
     val latest_video_title: String = "",
     val is_live: Boolean = false,
@@ -17,6 +18,7 @@ data class AvailableMonth(
     val month_year: String = "",
     val yyyy: String = "",
     val mm: String = "",
+    val video_count: Int = 0,
     val videos_path: String = "",
     val post_path: String = ""
 )
@@ -35,7 +37,9 @@ data class VideoItem(
     val thumbnail: String = "",
     val views: Int = 0,
     val is_stream: Boolean = false,
-    val is_short: Boolean = false
+    val is_short: Boolean = false,
+    val month_key: String = "",
+    val month_label: String = ""
 ) {
     val videoId: String get() = youtube_id.ifEmpty { id }
 }
@@ -47,5 +51,8 @@ data class CommunityPost(
     val text: String = "",
     val image_url: String = "",
     val images: List<String>? = null,
-    val link_url: String = ""
+    val image_urls: List<String>? = null,
+    val link_url: String = "",
+    val month_key: String = "",
+    val month_label: String = ""
 )

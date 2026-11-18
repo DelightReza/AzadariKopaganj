@@ -2,37 +2,36 @@ package com.azadari.kopaganj.ui
 
 import android.content.Intent
 import android.net.Uri
-import android.webkit.WebChromeClient
-import android.webkit.WebView
-import android.webkit.WebViewClient
-import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
-import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CenterAlignedTopAppBar
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.NavigationBar
@@ -40,10 +39,10 @@ import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
@@ -57,190 +56,251 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.viewinterop.AndroidView
-import androidx.compose.ui.window.DialogProperties
+import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NavHostController
+import androidx.navigation.compose.NavHost
+import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
+import androidx.navigation.compose.rememberNavController
 import coil.compose.AsyncImage
-import com.azadari.kopaganj.data.ArchiveRepository
 import com.azadari.kopaganj.data.ArchiveSnapshot
 import com.azadari.kopaganj.data.CommunityPost
 import com.azadari.kopaganj.data.VideoItem
+import com.azadari.kopaganj.ui.player.TheatrePlayer
 
-private enum class AppTab(val label: String) {
-    Home("Home"), Live("Live"), Videos("Videos"), Posts("Posts")
+private enum class AppTab(val label: String, val route: String) {
+    Home("Home", "home"),
+    Live("Live", "live"),
+    Videos("Videos", "videos"),
+    Posts("Posts", "posts")
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun AzadariApp() {
-    val context = LocalContext.current.applicationContext
-    val repository = remember(context) { ArchiveRepository(context) }
-    var snapshot by remember { mutableStateOf<ArchiveSnapshot?>(null) }
-    var error by remember { mutableStateOf<String?>(null) }
-    var loading by remember { mutableStateOf(false) }
-    var tab by remember { mutableIntStateOf(0) }
-    var query by remember { mutableStateOf("") }
-    var reloadKey by remember { mutableIntStateOf(0) }
-    var playerVideoId by remember { mutableStateOf<String?>(null) }
-    var playerTitle by remember { mutableStateOf("") }
-
-    suspend fun reload() {
-        val cached = repository.loadCached()
-        if (cached != null) {
-            snapshot = cached
-            loading = false
-        } else {
-            loading = true
-        }
-        error = null
-        runCatching { repository.load() }.fold(
-            { snapshot = it },
-            {
-                if (snapshot == null) error = it.message ?: "Could not load archive"
-            }
-        )
-        loading = false
-    }
-
-    LaunchedEffect(reloadKey) { reload() }
+fun AzadariApp(viewModel: ArchiveViewModel = viewModel()) {
+    val state by viewModel.state.collectAsState()
+    val nav = rememberNavController()
+    LaunchedEffect(Unit) { viewModel.refresh(full = true) }
+    val backEntry by nav.currentBackStackEntryAsState()
+    val route = backEntry?.destination?.route.orEmpty()
+    val showBars = !route.startsWith("watch/")
 
     Scaffold(
         topBar = {
-            CenterAlignedTopAppBar(
-                title = { Text("Azadari Kopaganj", fontWeight = FontWeight.Bold) },
-                actions = {
-                    IconButton(onClick = { reloadKey++ }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+            if (showBars) {
+                CenterAlignedTopAppBar(
+                    title = { Text("Azadari Kopaganj", fontWeight = FontWeight.Bold) },
+                    actions = {
+                        IconButton(onClick = { viewModel.refresh(full = true) }) {
+                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                        }
                     }
-                }
-            )
+                )
+            }
         },
         bottomBar = {
-            NavigationBar {
-                val tabs = listOf(
-                    AppTab.Home to Icons.Default.Home,
-                    AppTab.Live to Icons.Default.LiveTv,
-                    AppTab.Videos to Icons.Default.VideoLibrary,
-                    AppTab.Posts to Icons.Default.Article
-                )
-                tabs.forEachIndexed { index, item ->
-                    NavigationBarItem(
-                        selected = tab == index,
-                        onClick = { tab = index },
-                        icon = { Icon(item.second, contentDescription = item.first.label) },
-                        label = { Text(item.first.label) }
-                    )
+            if (showBars) {
+                NavigationBar {
+                    AppTab.values().forEach { tab ->
+                        NavigationBarItem(
+                            selected = route == tab.route,
+                            onClick = {
+                                nav.navigate(tab.route) {
+                                    launchSingleTop = true
+                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                    restoreState = true
+                                }
+                            },
+                            icon = {
+                                Icon(
+                                    when (tab) {
+                                        AppTab.Home -> Icons.Default.Home
+                                        AppTab.Live -> Icons.Default.LiveTv
+                                        AppTab.Videos -> Icons.Default.VideoLibrary
+                                        AppTab.Posts -> Icons.Default.Article
+                                    },
+                                    contentDescription = tab.label
+                                )
+                            },
+                            label = { Text(tab.label) }
+                        )
+                    }
                 }
             }
-
         }
     ) { padding ->
-        when {
-            loading -> Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
+        val snapshot = state.snapshot
+        if (state.loading && snapshot == null) {
+            Box(Modifier.fillMaxSize().padding(padding), contentAlignment = Alignment.Center) {
                 CircularProgressIndicator()
             }
-            error != null -> Column(
-                Modifier.fillMaxSize().padding(padding).padding(24.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(error!!)
+        } else if (snapshot == null) {
+            Box(Modifier.fillMaxSize().padding(padding).padding(24.dp), contentAlignment = Alignment.Center) {
+                Text(state.error ?: "No archive available")
             }
-            snapshot != null -> {
-                val data = snapshot!!
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize().padding(padding),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    if (tab == 0 || tab == 2) {
-                        item {
-                            OutlinedTextField(
-                                value = query,
-                                onValueChange = { query = it },
-                                modifier = Modifier.fillFill,
-                                label = { Text("Search videos") },
-                                singleLine = true
-                            )
-                        }
-                    }
-                    when (tab) {
-                        0 -> {
-                            if (data.live.is_live) item {
-                                LiveCard(data.live.title, data.live.youtube_id) { id, title ->
-                                    playerVideoId = id
-                                    playerTitle = title
-                                }
-                            }
-                            item { SectionTitle("Recent Videos") }
-                            items(data.videos.take(20)) { video ->
-                                VideoCard(video) { id, title ->
-                                    playerVideoId = id
-                                    playerTitle = title
-                                }
-                            }
-                        }
-                        1 -> {
-                            item {
-                                if (data.live.is_live) LiveCard(data.live.title, data.live.youtube_id) { id, title ->
-                                    playerVideoId = id
-                                    playerTitle = title
-                                }
-                                else Card(
-                                    modifier = Modifier.fillMaxWidth(),
-                                    colors = CardDefaults.cardColors()
-                                ) { Text("No live broadcast currently.", modifier = Modifier.padding(20.dp)) }
-                            }
-                            item { SectionTitle("Live Archive") }
-                            items(data.videos.filter { it.is_stream }.take(30)) { video ->
-                                VideoCard(video) { id, title ->
-                                    playerVideoId = id
-                                    playerTitle = title
-                                }
-                            }
-                        }
-                        2 -> {
-                            val filtered = data.videos.filter {
-                                query.isBlank() || it.title.contains(query, ignoreCase = true)
-                            }
-                            items(filtered) { video ->
-                                VideoCard(video) { id, title ->
-                                    playerVideoId = id
-                                    playerTitle = title
-                                }
-                            }
-                        }
-                        3 -> items(data.posts) { post -> PostCard(post) }
-                    }
+        } else {
+            NavHost(navController = nav, startDestination = "home", modifier = Modifier.padding(padding)) {
+                composable("home") { HomeScreen(snapshot, nav) }
+                composable("live") { LiveScreen(snapshot, nav) }
+                composable("videos") { VideosScreen(snapshot, nav) }
+                composable("posts") { PostsScreen(snapshot) }
+                composable("watch/{id}") { entry ->
+                    val id = entry.arguments?.getString("id").orEmpty()
+                    WatchScreen(snapshot, id, id == "live", nav)
                 }
             }
         }
-    }
-    playerVideoId?.let { videoId ->
-        InbuiltPlayerDialog(
-            videoId = videoId,
-            title = playerTitle,
-            onDismiss = { playerVideoId = null }
-        )
     }
 }
 
-private val Modifier.fillFill: Modifier get() = this.fillMaxWidth()
+@Composable
+private fun HomeScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        if (snapshot.live.is_live) {
+            item { LiveCard(snapshot.live.title, snapshot.live.youtube_id) { nav.navigate("watch/live") } }
+        }
+        item { SectionTitle("Recent Videos") }
+        items(snapshot.videos.take(20)) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
+        item { SectionTitle("Popular Videos") }
+        val popular = snapshot.videos.sortedByDescending { it.views }.take(8)
+        items(popular) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
+    }
+}
+
+@Composable
+private fun LiveScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            if (snapshot.live.is_live) {
+                LiveCard(snapshot.live.title, snapshot.live.youtube_id) { nav.navigate("watch/live") }
+            } else {
+                Card(Modifier.fillMaxWidth()) { Text("No live broadcast currently.", Modifier.padding(20.dp)) }
+            }
+        }
+        item { SectionTitle("Live Archive") }
+        items(snapshot.videos.filter {
+            it.is_stream || it.title.contains("live", true) || it.title.contains("jashn", true)
+        }) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
+    }
+}
+
+@Composable
+private fun VideosScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
+    var query by remember { mutableStateOf("") }
+    var month by remember { mutableStateOf("all") }
+    var topic by remember { mutableStateOf("all") }
+    val topics = listOf("all", "jashn", "majlis", "nauha", "qaseeda")
+    val videos = snapshot.videos.filter { video ->
+        val matchesQuery = query.isBlank() || "${video.title} ${video.videoId} ${video.published}".contains(query, true)
+        val matchesMonth = month == "all" || video.published.startsWith(month)
+        val matchesTopic = topic == "all" || video.title.contains(topic, true)
+        matchesQuery && matchesMonth && matchesTopic
+    }.sortedByDescending { it.published }
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("Search videos") }, singleLine = true)
+        }
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { FilterChip(month == "all", { month = "all" }, label = { Text("All") }) }
+                items(snapshot.config.available_months) { m ->
+                    val key = "${m.yyyy}-${m.mm}"
+                    FilterChip(month == key, { month = key }, label = { Text(m.month_year.ifBlank { key }) })
+                }
+            }
+        }
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                items(topics) { value ->
+                    FilterChip(topic == value, { topic = value }, label = { Text(value.replaceFirstChar { it.uppercase() }) })
+                }
+            }
+        }
+        if (videos.isEmpty()) item { Text("No videos found.", Modifier.padding(24.dp)) }
+        items(videos) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
+    }
+}
+
+@Composable
+private fun PostsScreen(snapshot: ArchiveSnapshot) {
+    var month by remember { mutableStateOf("all") }
+    var selectedPost by remember { mutableStateOf<CommunityPost?>(null) }
+    val posts = snapshot.posts.filter { month == "all" || it.date.startsWith(month) }
+    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        item {
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                item { FilterChip(month == "all", { month = "all" }, label = { Text("All") }) }
+                items(snapshot.config.available_months.map { "${it.yyyy}-${it.mm}" }.distinct()) { key ->
+                    FilterChip(month == key, { month = key }, label = { Text(key) })
+                }
+            }
+        }
+        items(posts) { post -> PostCard(post) { selectedPost = post } }
+    }
+    selectedPost?.let { PostLightbox(it) { selectedPost = null } }
+}
+
+@Composable
+private fun WatchScreen(snapshot: ArchiveSnapshot, id: String, isLiveRoute: Boolean, nav: NavHostController) {
+    val context = LocalContext.current
+    val live = snapshot.live
+    val isLive = isLiveRoute || live.is_live && id == live.youtube_id
+    val videoId = if (isLive) live.youtube_id else id
+    val active = snapshot.videos.firstOrNull { it.videoId == videoId }
+    val title = if (isLive) live.title.ifBlank { "Azadari Kopaganj Live" } else active?.title.orEmpty()
+    val queue = snapshot.videos.filter { !it.is_short }
+    val index = queue.indexOfFirst { it.videoId == videoId }
+    val previous = queue.getOrNull(index - 1)
+    val next = queue.getOrNull(index + 1)
+    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+        item {
+            Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
+                TextButton(onClick = { nav.popBackStack() }) { Text("Back") }
+                Spacer(Modifier.width(8.dp))
+                Text(if (isLive) "Live Stream" else "Watch", fontWeight = FontWeight.Bold)
+            }
+        }
+        item {
+            if (videoId.isNotBlank()) {
+                TheatrePlayer(
+                    videoId = videoId,
+                    isShort = active?.is_short == true || title.contains("#short", true),
+                    isLive = isLive,
+                    hasPrevious = previous != null,
+                    hasNext = next != null,
+                    onPrevious = { previous?.let { nav.navigate("watch/${it.videoId}") } },
+                    onNext = { next?.let { nav.navigate("watch/${it.videoId}") } },
+                    onEnded = { next?.let { nav.navigate("watch/${it.videoId}") } },
+                    modifier = Modifier.fillMaxWidth()
+                )
+            }
+        }
+        item {
+            Column(Modifier.padding(16.dp)) {
+                Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                Spacer(Modifier.height(8.dp))
+                TextButton(onClick = {
+                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")))
+                }) {
+                    Icon(Icons.Default.OpenInNew, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text("YouTube")
+                }
+            }
+        }
+        item { SectionTitle("Up Next") }
+        items(queue.take(60)) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
+    }
+}
 
 @Composable
 private fun SectionTitle(title: String) {
-    Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
-        modifier = Modifier.padding(top = 4.dp))
+    Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
 }
 
 @Composable
-private fun LiveCard(title: String, youtubeId: String, onPlay: (String, String) -> Unit) {
-    Card(
-        onClick = { onPlay(youtubeId, title.ifBlank { "Azadari Kopaganj Live" }) },
-        modifier = Modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer
-        )
-    ) {
+private fun LiveCard(title: String, youtubeId: String, onPlay: () -> Unit) {
+    Card(onClick = onPlay, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer)) {
         Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
             Icon(Icons.Default.LiveTv, contentDescription = null)
             Spacer(Modifier.width(12.dp))
@@ -253,38 +313,44 @@ private fun LiveCard(title: String, youtubeId: String, onPlay: (String, String) 
 }
 
 @Composable
-private fun VideoCard(video: VideoItem, onPlay: (String, String) -> Unit) {
-    Card(
-        onClick = { onPlay(video.videoId, video.title) },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column {
+private fun VideoCard(video: VideoItem, onPlay: () -> Unit) {
+    Card(onClick = onPlay, modifier = Modifier.fillMaxWidth()) {
+        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
             AsyncImage(
-                model = video.thumbnail.ifEmpty {
-                    "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
-                },
+                model = video.thumbnail.ifEmpty { "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg" },
                 contentDescription = video.title,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(190.dp)
-                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                modifier = Modifier.width(150.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)),
                 contentScale = ContentScale.Crop
             )
-            Column(Modifier.padding(14.dp)) {
-                Text(
-                    video.title,
-                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Text(video.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
                 Spacer(Modifier.height(6.dp))
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                Text("${video.published.take(10)}  ·  ${video.views} views", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+            }
+        }
+    }
+}
+
+@Composable
+private fun PostCard(post: CommunityPost, onOpen: () -> Unit) {
+    val context = LocalContext.current
+    val images = (post.images ?: post.image_urls ?: emptyList()).ifEmpty {
+        listOf(post.image_url).filter { it.isNotBlank() }
+    }
+    Card(onClick = onOpen, modifier = Modifier.fillMaxWidth()) {
+        if (images.isNotEmpty()) {
+            AsyncImage(images.first(), post.title, Modifier.fillMaxWidth().height(220.dp), contentScale = ContentScale.Crop)
+        }
+        Column(Modifier.padding(14.dp)) {
+            Text(post.title, style = androidx.compose.material3.MaterialTheme.typography.titleMedium)
+            Spacer(Modifier.height(6.dp))
+            Text(post.text, maxLines = 5, overflow = TextOverflow.Ellipsis)
+            if (post.link_url.isNotBlank()) {
+                TextButton(onClick = { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(post.link_url))) }) {
+                    Icon(Icons.Default.OpenInNew, contentDescription = null)
                     Spacer(Modifier.width(6.dp))
-                    Text(
-                        video.published.take(10),
-                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-                    )
+                    Text("Open")
                 }
             }
         }
@@ -292,104 +358,28 @@ private fun VideoCard(video: VideoItem, onPlay: (String, String) -> Unit) {
 }
 
 @Composable
-private fun PostCard(post: CommunityPost) {
-    val context = LocalContext.current
-    val image = post.images?.firstOrNull()?.ifBlank { null } ?: post.image_url
-    Card(
-        onClick = {
-            post.link_url.takeIf { it.isNotBlank() }?.let {
-                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
-            }
-        },
-        modifier = Modifier.fillMaxWidth()
-    ) {
-        Column {
-            if (image.isNotBlank()) {
-                AsyncImage(
-                    model = image,
-                    contentDescription = post.title,
-                    modifier = Modifier.fillMaxWidth().height(200.dp),
-                    contentScale = ContentScale.Crop
-                )
-            }
-            Column(Modifier.padding(14.dp)) {
-                Text(
-                    post.title,
-                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Spacer(Modifier.height(6.dp))
-                Text(
-                    post.text,
-                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                    maxLines = 4,
-                    overflow = TextOverflow.Ellipsis
-                )
+private fun PostLightbox(post: CommunityPost, onClose: () -> Unit) {
+    val images = (post.images ?: post.image_urls ?: emptyList()).ifEmpty {
+        listOf(post.image_url).filter { it.isNotBlank() }
+    }
+    var index by remember { mutableIntStateOf(0) }
+    AlertDialog(
+        onDismissRequest = onClose,
+        confirmButton = { TextButton(onClick = onClose) { Text("Close") } },
+        title = { Text(post.title) },
+        text = {
+            Column {
+                if (images.isNotEmpty()) {
+                    AsyncImage(images[index], post.title, Modifier.fillMaxWidth().aspectRatio(4f / 3f).clip(RoundedCornerShape(12.dp)), contentScale = ContentScale.Fit)
+                }
+                if (images.size > 1) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+                        TextButton(onClick = { index = (index - 1).coerceIn(0, images.lastIndex) }) { Text("Previous") }
+                        Text("${index + 1}/${images.size}")
+                        TextButton(onClick = { index = (index + 1).coerceIn(0, images.lastIndex) }) { Text("Next") }
+                    }
+                }
             }
         }
-    }
-}
-
-@Composable
-private fun InbuiltPlayerDialog(
-    videoId: String,
-    title: String,
-    onDismiss: () -> Unit
-) {
-    AlertDialog(
-        onDismissRequest = onDismiss,
-        confirmButton = {
-            TextButton(onClick = onDismiss) { Text("Close") }
-        },
-        title = { Text(title, maxLines = 2, overflow = TextOverflow.Ellipsis) },
-        text = {
-            Column(Modifier.fillMaxWidth()) {
-                AndroidView(
-                    factory = { context ->
-                        WebView(context).apply {
-                            settings.javaScriptEnabled = true
-                            settings.domStorageEnabled = true
-                            settings.mediaPlaybackRequiresUserGesture = false
-                            settings.loadWithOverviewMode = true
-                            settings.useWideViewPort = true
-                            webChromeClient = WebChromeClient()
-                            webViewClient = WebViewClient()
-                            isFocusable = true
-                            loadDataWithBaseURL(
-                                "https://www.youtube.com",
-                                """
-                                <!doctype html>
-                                <html>
-                                  <head>
-                                    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
-                                    <style>
-                                      html,body{margin:0;padding:0;background:#000;width:100%;height:100%;overflow:hidden}
-                                      iframe{width:100%;height:100%;border:0}
-                                    </style>
-                                  </head>
-                                  <body>
-                                    <iframe
-                                      src="https://www.youtube.com/embed/$videoId?autoplay=1&playsinline=1&rel=0"
-                                      allow="autoplay; encrypted-media; picture-in-picture; fullscreen"
-                                      allowfullscreen></iframe>
-                                  </body>
-                                </html>
-                                """.trimIndent(),
-                                "text/html",
-                                "utf-8",
-                                null
-                            )
-                        }
-                    },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .aspectRatio(16f / 9f)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(androidx.compose.ui.graphics.Color.Black)
-                )
-            }
-        },
-        properties = DialogProperties(usePlatformDefaultWidth = false)
     )
 }

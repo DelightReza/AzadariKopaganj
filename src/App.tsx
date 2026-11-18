@@ -482,6 +482,63 @@ export default function App() {
     );
   };
 
+  useEffect(() => {
+    const azadariWindow = window as typeof window & {
+      __azadariHandleAndroidBack?: () => boolean;
+    };
+
+    azadariWindow.__azadariHandleAndroidBack = () => {
+      const historyState =
+        typeof window.history.state === 'object' && window.history.state
+          ? window.history.state
+          : {};
+
+      if (historyState.azadariLightbox || historyState.azadariFullscreen) {
+        window.history.back();
+        return true;
+      }
+
+      if (watchingPlayerOpen) {
+        handleBackFromWatch();
+        return true;
+      }
+
+      if (activeSection !== 'home') {
+        if (inAppNavDepthRef.current > 0) {
+          window.history.back();
+        } else {
+          desiredLiveRef.current = false;
+          setActiveSection('home');
+          setWatchingPlayerOpen(false);
+          setIsPlayingLive(false);
+          commitRoute(
+            {
+              ...currentRouteRef.current,
+              section: 'home',
+              watching: false,
+              watchId: null,
+              isLiveStream: false,
+            },
+            'replace',
+            'top'
+          );
+        }
+        return true;
+      }
+
+      return false;
+    };
+
+    return () => {
+      delete azadariWindow.__azadariHandleAndroidBack;
+    };
+  }, [
+    activeSection,
+    watchingPlayerOpen,
+    commitRoute,
+    handleBackFromWatch,
+  ]);
+
   const upNextVideos = useMemo(
     () =>
       filterVideos(videos, {
@@ -585,7 +642,7 @@ export default function App() {
               <div
                 key={vid}
                 onClick={() => handleSelectVideoItem(video)}
-                className="group cursor-pointer flex flex-col"
+                className="azadari-video-card group cursor-pointer flex flex-col"
               >
                 {/* Thumbnail (9:16 centered framing for Shorts, 16:9 for Videos/Streams) */}
                 <div className="relative aspect-video w-full rounded-2xl overflow-hidden bg-black ring-1 ring-black/[0.06] dark:ring-white/[0.08] shadow-sm group-hover:shadow-xl group-hover:shadow-black/25 transition-all duration-200 flex items-center justify-center">
@@ -667,7 +724,7 @@ export default function App() {
       <OfflineIndicator />
 
       {/* 1. FROSTED TOP MASTHEAD BAR (Logo, Search, Theme) */}
-      <header className="sticky top-0 z-40 h-14 sm:h-[60px] bg-white/85 dark:bg-[#0B0B0E]/85 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between gap-3 sm:gap-6 border-b border-black/[0.07] dark:border-white/[0.08]">
+      <header className="sticky top-0 z-40 h-14 sm:h-[60px] bg-white/90 dark:bg-[#0B0B0E]/90 backdrop-blur-xl px-3 sm:px-6 flex items-center justify-between gap-2.5 sm:gap-6 border-b border-black/[0.07] dark:border-white/[0.08] shadow-[0_1px_18px_rgba(0,0,0,0.025)]">
         {/* Left: Official Azadari Kopaganj Brand Mark */}
         <button
           type="button"
@@ -681,7 +738,7 @@ export default function App() {
               className="h-6 sm:h-7 w-auto object-contain"
             />
           </span>
-          <span className="font-display font-bold text-sm sm:text-lg tracking-tight text-[#0F0F12] dark:text-[#F3F3F6] group-hover:text-[#CC0000] dark:group-hover:text-white transition-colors whitespace-nowrap">
+          <span className="hidden min-[390px]:inline font-display font-bold text-sm sm:text-lg tracking-tight text-[#0F0F12] dark:text-[#F3F3F6] group-hover:text-[#CC0000] dark:group-hover:text-white transition-colors whitespace-nowrap">
             Azadari Kopaganj
           </span>
         </button>
@@ -823,7 +880,7 @@ export default function App() {
 
               {/* TAB 1: HOME (Active Live Player only when live + Recent Videos + Popular Videos) */}
               {activeSection === 'home' && (
-                <div className="space-y-10">
+                <div className="space-y-9 sm:space-y-11">
                   {live.is_live && live.youtube_id && (
                     <div className="rounded-2xl bg-white dark:bg-[#141418] border border-[#DC2626]/30 p-3.5 sm:p-5 shadow-md grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
                       <div className="lg:col-span-6 xl:col-span-5 relative aspect-video w-full rounded-xl overflow-hidden bg-black ring-1 ring-white/10 shadow-md">
@@ -1070,7 +1127,7 @@ export default function App() {
       {/* FLOATING SECTION NAVIGATION DOCK (Only Home, Live, Videos, Posts) */}
       <nav
         aria-label="Floating Section Navigation"
-        className="fixed bottom-3.5 sm:bottom-5 left-1/2 -translate-x-1/2 z-40 p-1.5 rounded-full bg-white/90 dark:bg-[#16161B]/90 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_14px_40px_rgba(0,0,0,0.3)] flex items-center gap-1"
+        className="fixed bottom-[calc(0.875rem+env(safe-area-inset-bottom))] sm:bottom-5 left-1/2 -translate-x-1/2 z-40 p-1.5 rounded-full bg-white/95 dark:bg-[#16161B]/95 backdrop-blur-xl border border-black/[0.08] dark:border-white/[0.12] shadow-[0_14px_40px_rgba(0,0,0,0.28)] flex items-center gap-0.5 sm:gap-1"
       >
         {(
           [

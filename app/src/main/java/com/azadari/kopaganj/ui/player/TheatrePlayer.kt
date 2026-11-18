@@ -2,7 +2,9 @@ package com.azadari.kopaganj.ui.player
 
 import android.annotation.SuppressLint
 import android.app.Activity
+import android.content.Intent
 import android.content.pm.ActivityInfo
+import android.net.Uri
 import android.os.Handler
 import android.os.Looper
 import android.webkit.JavascriptInterface
@@ -144,7 +146,13 @@ fun TheatrePlayer(
                                             currentSeconds = obj.optDouble("current", 0.0).toFloat(),
                                             durationSeconds = obj.optDouble("duration", 0.0).toFloat()
                                         )
-                                        "error" -> state.copy(buffering = false, error = "Playback error ${obj.optInt("code", 0)}")
+                                        "error" -> {
+                                            val code = obj.optInt("code", 0)
+                                            state.copy(
+                                                buffering = false,
+                                                error = playbackErrorMessage(code)
+                                            )
+                                        }
                                         "quality" -> state.copy(quality = obj.optString("value", "auto"))
                                         "speed" -> state.copy(speed = obj.optDouble("value", 1.0).toFloat())
                                         "mute" -> state.copy(muted = obj.optBoolean("value", false))
@@ -156,7 +164,13 @@ fun TheatrePlayer(
                         "AzadariPlayer"
                     )
                     val html = playerHtml(videoId, isLive)
-                    loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null)
+                    loadDataWithBaseURL(
+                        "https://com.azadari.kopaganj/",
+                        html,
+                        "text/html",
+                        "utf-8",
+                        null
+                    )
                     webView = this
                 }
             },
@@ -173,7 +187,25 @@ fun TheatrePlayer(
             CircularProgressIndicator(color = Color.White)
         }
         if (state.error != null) {
-            Text(state.error!!, color = Color.White, modifier = Modifier.padding(16.dp))
+            Column(
+                horizontalAlignment = Alignment.CenterHorizontally,
+                modifier = Modifier.padding(16.dp)
+            ) {
+                Text(state.error!!, color = Color.White)
+                Spacer(Modifier.height(8.dp))
+                androidx.compose.material3.TextButton(
+                    onClick = {
+                        context.startActivity(
+                            Intent(
+                                Intent.ACTION_VIEW,
+                                Uri.parse("https://www.youtube.com/watch?v=$videoId")
+                            )
+                        )
+                    }
+                ) {
+                    Text("Watch on YouTube", color = Color.White)
+                }
+            }
         }
 
         Column(
@@ -276,10 +308,19 @@ private fun formatTime(seconds: Float): String {
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
 
+private fun playbackErrorMessage(code: Int): String = when (code) {
+    152, 153 -> "YouTube does not allow this video to play inside the app."
+    101, 150 -> "The video owner has disabled embedded playback."
+    100 -> "This YouTube video is unavailable or private."
+    2 -> "The YouTube video ID is invalid."
+    else -> "YouTube playback error ($code)."
+}
+
 private fun playerHtml(videoId: String, isLive: Boolean): String =
     """
     <!doctype html><html><head>
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
+    <meta name="referrer" content="strict-origin-when-cross-origin">
     <style>html,body,#player{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden;border:0}</style>
     </head><body>
     <div id="player"></div>
@@ -300,7 +341,18 @@ private fun playerHtml(videoId: String, isLive: Boolean): String =
         if(window.pending){cfg.id=window.pending.id;cfg.live=window.pending.live}
         player=new YT.Player('player',{
           videoId:cfg.id,
-          playerVars:{playsinline:1,rel:0,modestbranding:1,controls:0,fs:0,autoplay:1},
+          host:'https://www.youtube.com',
+          playerVars:{
+            playsinline:1,
+            rel:0,
+            modestbranding:1,
+            controls:0,
+            fs:0,
+            autoplay:1,
+            enablejsapi:1,
+            origin:'https://com.azadari.kopaganj',
+            widget_referrer:'https://com.azadari.kopaganj/'
+          },
           events:{
             onReady:function(e){emit('ready',{type:'ready'});e.target.playVideo();timer=setInterval(function(){emit('time',{type:'time',current:e.target.getCurrentTime(),duration:e.target.getDuration()})},500)},
             onStateChange:function(e){

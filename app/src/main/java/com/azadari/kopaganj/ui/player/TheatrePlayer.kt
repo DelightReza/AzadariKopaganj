@@ -11,6 +11,7 @@ import android.webkit.JavascriptInterface
 import android.webkit.WebChromeClient
 import android.webkit.WebView
 import android.webkit.WebViewClient
+import android.view.View
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -125,6 +126,13 @@ fun TheatrePlayer(
                     settings.mediaPlaybackRequiresUserGesture = false
                     settings.loadWithOverviewMode = true
                     settings.useWideViewPort = true
+                    settings.setSupportZoom(false)
+                    isVerticalScrollBarEnabled = false
+                    isHorizontalScrollBarEnabled = false
+                    isScrollContainer = false
+                    overScrollMode = View.OVER_SCROLL_NEVER
+                    setBackgroundColor(android.graphics.Color.BLACK)
+                    setLayerType(View.LAYER_TYPE_HARDWARE, null)
                     webChromeClient = WebChromeClient()
                     webViewClient = WebViewClient()
                     addJavascriptInterface(
@@ -321,7 +329,10 @@ private fun playerHtml(videoId: String, isLive: Boolean): String =
     <!doctype html><html><head>
     <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1">
     <meta name="referrer" content="strict-origin-when-cross-origin">
-    <style>html,body,#player{margin:0;padding:0;width:100%;height:100%;background:#000;overflow:hidden;border:0}</style>
+    <style>
+      html,body,#player{margin:0;padding:0;width:100%;height:100%;min-height:100%;background:#000;overflow:hidden;border:0;display:block}
+      iframe{position:absolute!important;top:0!important;left:0!important;width:100%!important;height:100%!important;border:0!important;background:#000!important}
+    </style>
     </head><body>
     <div id="player"></div>
     <script>
@@ -335,7 +346,7 @@ private fun playerHtml(videoId: String, isLive: Boolean): String =
       function azadariSkip(s){var t=player.getCurrentTime()+s;player.seekTo(t,true)}
       function azadariSetSpeed(r){player.setPlaybackRate(r)}
       function azadariSetQuality(q){q==='auto'?player.setPlaybackQualityRange('highres','tiny'):player.setPlaybackQuality(q)}
-      var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';document.head.appendChild(tag);
+      var tag=document.createElement('script');tag.src='https://www.youtube.com/iframe_api';tag.async=true;document.head.appendChild(tag);
       function onYouTubeIframeAPIReady(){
         var cfg={id:'$videoId',live:$isLive};
         if(window.pending){cfg.id=window.pending.id;cfg.live=window.pending.live}

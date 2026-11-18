@@ -2,6 +2,7 @@ package com.azadari.kopaganj.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -262,15 +263,15 @@ private fun WatchScreen(snapshot: ArchiveSnapshot, id: String, isLiveRoute: Bool
     val index = queue.indexOfFirst { it.videoId == videoId }
     val previous = queue.getOrNull(index - 1)
     val next = queue.getOrNull(index + 1)
-    LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
-        item {
+    Column(modifier = Modifier.fillMaxSize()) {
+        Column(
+            modifier = Modifier.fillMaxWidth().background(androidx.compose.material3.MaterialTheme.colorScheme.surface)
+        ) {
             Row(Modifier.fillMaxWidth().padding(12.dp), verticalAlignment = Alignment.CenterVertically) {
                 TextButton(onClick = { nav.popBackStack() }) { Text("Back") }
                 Spacer(Modifier.width(8.dp))
                 Text(if (isLive) "Live Stream" else "Watch", fontWeight = FontWeight.Bold)
             }
-        }
-        item {
             if (videoId.isNotBlank()) {
                 TheatrePlayer(
                     videoId = videoId,
@@ -285,21 +286,23 @@ private fun WatchScreen(snapshot: ArchiveSnapshot, id: String, isLiveRoute: Bool
                 )
             }
         }
-        item {
-            Column(Modifier.padding(16.dp)) {
-                Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
-                Spacer(Modifier.height(8.dp))
-                TextButton(onClick = {
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")))
-                }) {
-                    Icon(Icons.Default.OpenInNew, contentDescription = null)
-                    Spacer(Modifier.width(6.dp))
-                    Text("YouTube")
+        LazyColumn(modifier = Modifier.fillMaxSize(), contentPadding = PaddingValues(bottom = 24.dp)) {
+            item {
+                Column(Modifier.padding(16.dp)) {
+                    Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+                    Spacer(Modifier.height(8.dp))
+                    TextButton(onClick = {
+                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=$videoId")))
+                    }) {
+                        Icon(Icons.Default.OpenInNew, contentDescription = null)
+                        Spacer(Modifier.width(6.dp))
+                        Text("YouTube")
+                    }
                 }
             }
+            item { SectionTitle("Up Next") }
+            items(queue.take(60)) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
         }
-        item { SectionTitle("Up Next") }
-        items(queue.take(60)) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
     }
 }
 

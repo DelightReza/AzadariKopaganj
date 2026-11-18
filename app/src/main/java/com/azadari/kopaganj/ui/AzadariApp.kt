@@ -203,87 +203,88 @@ private fun LiveCard(title: String, youtubeId: String) {
                 Text(title.ifBlank { "Azadari Kopaganj Live" }, maxLines = 2, overflow = TextOverflow.Ellipsis)
             }
         }
+    }
+}
 
-        @Composable
-        private fun VideoCard(video: VideoItem) {
-            val context = LocalContext.current
-            Card(
-                onClick = {
-                    val url = "https://www.youtube.com/watch?v=${video.videoId}"
-                    context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+@Composable
+private fun VideoCard(video: VideoItem) {
+    val context = LocalContext.current
+    Card(
+        onClick = {
+            context.startActivity(
+                Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/watch?v=${video.videoId}"))
+            )
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            AsyncImage(
+                model = video.thumbnail.ifEmpty {
+                    "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
                 },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column {
-                    AsyncImage(
-                        model = video.thumbnail.ifEmpty {
-                            "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg"
-                        },
-                        contentDescription = video.title,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(190.dp)
-                            .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                        contentScale = ContentScale.Crop
+                contentDescription = video.title,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(190.dp)
+                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
+                contentScale = ContentScale.Crop
+            )
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    video.title,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(6.dp))
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Default.PlayArrow, contentDescription = null)
+                    Spacer(Modifier.width(6.dp))
+                    Text(
+                        video.published.take(10),
+                        style = androidx.compose.material3.MaterialTheme.typography.bodySmall
                     )
-                    Column(Modifier.padding(14.dp)) {
-                        Text(
-                            video.title,
-                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Row(verticalAlignment = Alignment.CenterVertically) {
-                            Icon(Icons.Default.PlayArrow, contentDescription = null)
-                            Spacer(Modifier.width(6.dp))
-                            Text(
-                                video.published.take(10),
-                                style = androidx.compose.material3.MaterialTheme.typography.bodySmall
-                            )
-                        }
-                    }
                 }
             }
         }
+    }
+}
 
-        @Composable
-        private fun PostCard(post: CommunityPost) {
-            val context = LocalContext.current
-            val image = post.images?.firstOrNull()?.ifBlank { null } ?: post.image_url
-            Card(
-                onClick = {
-                    post.link_url.takeIf { it.isNotBlank() }?.let {
-                        context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
-                    }
-                },
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Column {
-                    if (image.isNotBlank()) {
-                        AsyncImage(
-                            model = image,
-                            contentDescription = post.title,
-                            modifier = Modifier.fillMaxWidth().height(200.dp),
-                            contentScale = ContentScale.Crop
-                        )
-                    }
-                    Column(Modifier.padding(14.dp)) {
-                        Text(
-                            post.title,
-                            style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
-                            maxLines = 2,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                        Spacer(Modifier.height(6.dp))
-                        Text(
-                            post.text,
-                            style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
-                            maxLines = 4,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
-                }
+@Composable
+private fun PostCard(post: CommunityPost) {
+    val context = LocalContext.current
+    val image = post.images?.firstOrNull()?.ifBlank { null } ?: post.image_url
+    Card(
+        onClick = {
+            post.link_url.takeIf { it.isNotBlank() }?.let {
+                context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
+            }
+        },
+        modifier = Modifier.fillMaxWidth()
+    ) {
+        Column {
+            if (image.isNotBlank()) {
+                AsyncImage(
+                    model = image,
+                    contentDescription = post.title,
+                    modifier = Modifier.fillMaxWidth().height(200.dp),
+                    contentScale = ContentScale.Crop
+                )
+            }
+            Column(Modifier.padding(14.dp)) {
+                Text(
+                    post.title,
+                    style = androidx.compose.material3.MaterialTheme.typography.titleMedium,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                Spacer(Modifier.height(6.dp))
+                Text(
+                    post.text,
+                    style = androidx.compose.material3.MaterialTheme.typography.bodyMedium,
+                    maxLines = 4,
+                    overflow = TextOverflow.Ellipsis
+                )
             }
         }
     }

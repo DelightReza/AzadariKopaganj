@@ -2,7 +2,9 @@ package com.azadari.kopaganj.ui
 
 import android.content.Intent
 import android.net.Uri
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,13 +20,21 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Article
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Home
 import androidx.compose.material.icons.filled.LiveTv
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.OpenInNew
 import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -35,12 +45,15 @@ import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.NavigationBar
 import androidx.compose.material3.NavigationBarItem
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -52,8 +65,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -69,6 +84,7 @@ import com.azadari.kopaganj.data.CommunityPost
 import com.azadari.kopaganj.data.VideoItem
 import com.azadari.kopaganj.ui.player.TheatrePlayer
 import com.azadari.kopaganj.MainActivity
+import com.azadari.kopaganj.R
 
 private enum class AppTab(val label: String, val route: String) {
     Home("Home", "home"),
@@ -82,6 +98,7 @@ private enum class AppTab(val label: String, val route: String) {
 fun AzadariApp(viewModel: ArchiveViewModel = viewModel()) {
     val state by viewModel.state.collectAsState()
     val nav = rememberNavController()
+    var globalSearch by remember { mutableStateOf("") }
     LaunchedEffect(Unit) { viewModel.refresh(full = true) }
     LaunchedEffect(state.snapshot) {
         if (state.snapshot != null) {
@@ -99,44 +116,25 @@ fun AzadariApp(viewModel: ArchiveViewModel = viewModel()) {
     Scaffold(
         topBar = {
             if (showBars) {
-                CenterAlignedTopAppBar(
-                    title = { Text("Azadari Kopaganj", fontWeight = FontWeight.Bold) },
-                    actions = {
-                        IconButton(onClick = { viewModel.refresh(full = true) }) {
-                            Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+                Masthead(
+                    query = globalSearch,
+                    onQueryChange = { value ->
+                        globalSearch = value
+                        if (value.isNotBlank() && route != "videos") {
+                            nav.navigate("videos") { launchSingleTop = true }
                         }
-                    }
+                    },
+                    onSearch = {
+                        nav.navigate("videos") { launchSingleTop = true }
+                    },
+                    onHome = { nav.navigate("home") { launchSingleTop = true } },
+                    onRefresh = { viewModel.refresh(full = true) }
                 )
             }
         },
         bottomBar = {
             if (showBars) {
-                NavigationBar {
-                    AppTab.values().forEach { tab ->
-                        NavigationBarItem(
-                            selected = route == tab.route,
-                            onClick = {
-                                nav.navigate(tab.route) {
-                                    launchSingleTop = true
-                                    popUpTo(nav.graph.startDestinationId) { saveState = true }
-                                    restoreState = true
-                                }
-                            },
-                            icon = {
-                                Icon(
-                                    when (tab) {
-                                        AppTab.Home -> Icons.Default.Home
-                                        AppTab.Live -> Icons.Default.LiveTv
-                                        AppTab.Videos -> Icons.Default.VideoLibrary
-                                        AppTab.Posts -> Icons.Default.Article
-                                    },
-                                    contentDescription = tab.label
-                                )
-                            },
-                            label = { Text(tab.label) }
-                        )
-                    }
-                }
+                FloatingSectionDock(route = route, nav = nav)
             }
         }
     ) { padding ->
@@ -153,7 +151,7 @@ fun AzadariApp(viewModel: ArchiveViewModel = viewModel()) {
             NavHost(navController = nav, startDestination = "home", modifier = Modifier.padding(padding)) {
                 composable("home") { HomeScreen(snapshot, nav) }
                 composable("live") { LiveScreen(snapshot, nav) }
-                composable("videos") { VideosScreen(snapshot, nav) }
+                composable("videos") { VideosScreen(snapshot, nav, globalSearch) }
                 composable("posts") { PostsScreen(snapshot) }
                 composable("watch/{id}") { entry ->
                     val id = entry.arguments?.getString("id").orEmpty()
@@ -164,15 +162,123 @@ fun AzadariApp(viewModel: ArchiveViewModel = viewModel()) {
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun Masthead(
+    query: String,
+    onQueryChange: (String) -> Unit,
+    onSearch: () -> Unit,
+    onHome: () -> Unit,
+    onRefresh: () -> Unit
+) {
+    Surface(
+        color = MaterialTheme.surfaceContainerLowest,
+        tonalElevation = 2.dp,
+        shadowElevation = 2.dp
+    ) {
+        Row(
+            Modifier
+                .fillMaxWidth()
+                .height(64.dp)
+                .padding(horizontal = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            IconButton(onClick = onHome) {
+                Image(
+                    painter = painterResource(R.drawable.azadari_logo),
+                    contentDescription = "Azadari Kopaganj",
+                    modifier = Modifier.size(38.dp).clip(RoundedCornerShape(10.dp)),
+                    contentScale = ContentScale.Fit
+                )
+            }
+            OutlinedTextField(
+                value = query,
+                onValueChange = onQueryChange,
+                modifier = Modifier.weight(1f).height(48.dp),
+                placeholder = { Text("Search Majlis, Nauha, Jashn...", maxLines = 1) },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                trailingIcon = {
+                    if (query.isNotBlank()) {
+                        IconButton(onClick = onSearch) {
+                            Icon(Icons.Default.Search, contentDescription = "Search")
+                        }
+                    }
+                },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp)
+            )
+            IconButton(onClick = onRefresh) {
+                Icon(Icons.Default.Refresh, contentDescription = "Refresh")
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingSectionDock(route: String, nav: NavHostController) {
+    Box(
+        Modifier.fillMaxWidth().padding(bottom = 10.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Surface(
+            shape = RoundedCornerShape(28.dp),
+            tonalElevation = 6.dp,
+            shadowElevation = 12.dp,
+            color = MaterialTheme.surfaceContainerHigh
+        ) {
+            Row(
+                Modifier.height(56.dp).padding(horizontal = 6.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                AppTab.values().forEach { tab ->
+                    val selected = route == tab.route
+                    TextButton(
+                        onClick = {
+                            nav.navigate(tab.route) {
+                                launchSingleTop = true
+                                popUpTo(nav.graph.startDestinationId) { saveState = true }
+                                restoreState = true
+                            }
+                        },
+                        modifier = Modifier.padding(horizontal = 2.dp),
+                        colors = androidx.compose.material3.ButtonDefaults.textButtonColors(
+                            containerColor = if (selected) MaterialTheme.colorScheme.inverseSurface else androidx.compose.ui.graphics.Color.Transparent,
+                            contentColor = if (selected) MaterialTheme.colorScheme.inverseOnSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    ) {
+                        Icon(
+                            when (tab) {
+                                AppTab.Home -> Icons.Default.Home
+                                AppTab.Live -> Icons.Default.LiveTv
+                                AppTab.Videos -> Icons.Default.VideoLibrary
+                                AppTab.Posts -> Icons.Default.Article
+                            },
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = if (selected) androidx.compose.ui.graphics.Color(0xFFFF5252) else androidx.compose.ui.graphics.Color.Unspecified
+                        )
+                        Spacer(Modifier.width(5.dp))
+                        Text(tab.label)
+                    }
+                }
+            }
+        }
+    }
+}
+
 @Composable
 private fun HomeScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         if (snapshot.live.is_live) {
             item { LiveCard(snapshot.live.title, snapshot.live.youtube_id) { nav.navigate("watch/live") } }
         }
-        item { SectionTitle("Recent Videos") }
+        item { ShelfHeader("Recent videos", "${snapshot.videos.size} videos") { nav.navigate("videos") } }
         items(snapshot.videos.take(20)) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
-        item { SectionTitle("Popular Videos") }
+        item { ShelfHeader("Popular videos", "Most watched recordings") { nav.navigate("videos") } }
         val popular = snapshot.videos.sortedByDescending { it.views }.take(8)
         items(popular) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
     }
@@ -180,24 +286,30 @@ private fun HomeScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
 
 @Composable
 private fun LiveScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+    LazyColumn(
+        contentPadding = PaddingValues(horizontal = 16.dp, vertical = 20.dp, bottom = 100.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
         item {
             if (snapshot.live.is_live) {
                 LiveCard(snapshot.live.title, snapshot.live.youtube_id) { nav.navigate("watch/live") }
             } else {
-                Card(Modifier.fillMaxWidth()) { Text("No live broadcast currently.", Modifier.padding(20.dp)) }
+                Card(Modifier.fillMaxWidth()) {
+                    Text("No live broadcast currently.", Modifier.padding(20.dp))
+                }
             }
         }
         item { SectionTitle("Live Archive") }
-        items(snapshot.videos.filter {
+        val liveVideos = snapshot.videos.filter {
             it.is_stream || it.title.contains("live", true) || it.title.contains("jashn", true)
-        }) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
+        }
+        items(liveVideos) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
     }
 }
 
 @Composable
-private fun VideosScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
-    var query by remember { mutableStateOf("") }
+private fun VideosScreen(snapshot: ArchiveSnapshot, nav: NavHostController, initialQuery: String) {
+    var query by remember(initialQuery) { mutableStateOf(initialQuery) }
     var month by remember { mutableStateOf("all") }
     var topic by remember { mutableStateOf("all") }
     val topics = listOf("all", "jashn", "majlis", "nauha", "qaseeda")
@@ -207,11 +319,24 @@ private fun VideosScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
         val matchesTopic = topic == "all" || video.title.contains(topic, true)
         matchesQuery && matchesMonth && matchesTopic
     }.sortedByDescending { it.published }
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
-            OutlinedTextField(query, { query = it }, Modifier.fillMaxWidth(), label = { Text("Search videos") }, singleLine = true)
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(160.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 100.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+            OutlinedTextField(
+                value = query,
+                onValueChange = { query = it },
+                modifier = Modifier.fillMaxWidth(),
+                label = { Text("Search videos") },
+                leadingIcon = { Icon(Icons.Default.Search, contentDescription = null) },
+                singleLine = true,
+                shape = RoundedCornerShape(24.dp)
+            )
         }
-        item {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { FilterChip(month == "all", { month = "all" }, label = { Text("All") }) }
                 items(snapshot.config.available_months) { m ->
@@ -220,14 +345,16 @@ private fun VideosScreen(snapshot: ArchiveSnapshot, nav: NavHostController) {
                 }
             }
         }
-        item {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 items(topics) { value ->
                     FilterChip(topic == value, { topic = value }, label = { Text(value.replaceFirstChar { it.uppercase() }) })
                 }
             }
         }
-        if (videos.isEmpty()) item { Text("No videos found.", Modifier.padding(24.dp)) }
+        if (videos.isEmpty()) item(span = { GridItemSpan(maxLineSpan) }) {
+            Text("No videos found.", Modifier.padding(24.dp))
+        }
         items(videos) { video -> VideoCard(video) { nav.navigate("watch/${video.videoId}") } }
     }
 }
@@ -237,8 +364,13 @@ private fun PostsScreen(snapshot: ArchiveSnapshot) {
     var month by remember { mutableStateOf("all") }
     var selectedPost by remember { mutableStateOf<CommunityPost?>(null) }
     val posts = snapshot.posts.filter { month == "all" || it.date.startsWith(month) }
-    LazyColumn(contentPadding = PaddingValues(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        item {
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(220.dp),
+        contentPadding = PaddingValues(start = 12.dp, end = 12.dp, top = 16.dp, bottom = 100.dp),
+        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
             LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 item { FilterChip(month == "all", { month = "all" }, label = { Text("All") }) }
                 items(snapshot.config.available_months.map { "${it.yyyy}-${it.mm}" }.distinct()) { key ->
@@ -308,18 +440,68 @@ private fun WatchScreen(snapshot: ArchiveSnapshot, id: String, isLiveRoute: Bool
 
 @Composable
 private fun SectionTitle(title: String) {
-    Text(title, style = androidx.compose.material3.MaterialTheme.typography.titleLarge)
+    Text(
+        title,
+        style = androidx.compose.material3.MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.Bold
+    )
+}
+
+@Composable
+private fun ShelfHeader(title: String, subtitle: String, onViewAll: () -> Unit) {
+    Row(
+        Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.Bottom,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(Modifier.weight(1f)) {
+            SectionTitle(title)
+            Text(
+                subtitle,
+                style = androidx.compose.material3.MaterialTheme.typography.bodySmall,
+                color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant
+            )
+        }
+        TextButton(onClick = onViewAll) {
+            Text("View all")
+            Spacer(Modifier.width(4.dp))
+            Icon(Icons.Default.ArrowForward, contentDescription = null, modifier = Modifier.size(16.dp))
+        }
+    }
 }
 
 @Composable
 private fun LiveCard(title: String, youtubeId: String, onPlay: () -> Unit) {
-    Card(onClick = onPlay, modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.primaryContainer)) {
-        Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Default.LiveTv, contentDescription = null)
-            Spacer(Modifier.width(12.dp))
-            Column {
-                Text("LIVE NOW", fontWeight = FontWeight.Bold)
-                Text(title.ifBlank { "Azadari Kopaganj Live" }, maxLines = 2, overflow = TextOverflow.Ellipsis)
+    Card(
+        onClick = onPlay,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surfaceContainerLow)
+    ) {
+        Column {
+            Box(Modifier.fillMaxWidth().aspectRatio(16f / 9f)) {
+                AsyncImage(
+                    model = "https://img.youtube.com/vi/$youtubeId/hqdefault.jpg",
+                    contentDescription = title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                Surface(
+                    modifier = Modifier.align(Alignment.TopStart).padding(12.dp),
+                    color = Color(0xFFDC2626),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Row(Modifier.padding(horizontal = 8.dp, vertical = 5.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.LiveTv, contentDescription = null, tint = Color.White, modifier = Modifier.size(14.dp))
+                        Spacer(Modifier.width(5.dp))
+                        Text("LIVE NOW", color = Color.White, style = androidx.compose.material3.MaterialTheme.typography.labelSmall, fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
+            Column(Modifier.padding(16.dp)) {
+                Text(title.ifBlank { "Azadari Kopaganj Live" }, style = androidx.compose.material3.MaterialTheme.typography.titleMedium, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Bold)
+                Spacer(Modifier.height(5.dp))
+                Text("Azadari Kopaganj · Active Live Broadcast", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }
@@ -327,19 +509,24 @@ private fun LiveCard(title: String, youtubeId: String, onPlay: () -> Unit) {
 
 @Composable
 private fun VideoCard(video: VideoItem, onPlay: () -> Unit) {
-    Card(onClick = onPlay, modifier = Modifier.fillMaxWidth()) {
-        Row(Modifier.padding(12.dp), verticalAlignment = Alignment.Top) {
+    Card(
+        onClick = onPlay,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(14.dp),
+        colors = CardDefaults.cardColors(containerColor = androidx.compose.material3.MaterialTheme.colorScheme.surface)
+    ) {
+        Column {
             AsyncImage(
                 model = video.thumbnail.ifEmpty { "https://img.youtube.com/vi/${video.videoId}/hqdefault.jpg" },
                 contentDescription = video.title,
-                modifier = Modifier.width(150.dp).aspectRatio(16f / 9f).clip(RoundedCornerShape(10.dp)),
+                modifier = Modifier.fillMaxWidth().aspectRatio(16f / 9f).clip(RoundedCornerShape(topStart = 14.dp, topEnd = 14.dp)),
                 contentScale = ContentScale.Crop
             )
-            Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Text(video.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium)
+            Column(Modifier.padding(horizontal = 12.dp, vertical = 10.dp)) {
+                Text(video.title, maxLines = 2, overflow = TextOverflow.Ellipsis, fontWeight = FontWeight.Medium, style = androidx.compose.material3.MaterialTheme.typography.titleSmall)
                 Spacer(Modifier.height(6.dp))
-                Text("${video.published.take(10)}  ·  ${video.views} views", style = androidx.compose.material3.MaterialTheme.typography.bodySmall)
+                Text("Azadari Kopaganj", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
+                Text("${video.published.take(10)} · ${video.views} views", style = androidx.compose.material3.MaterialTheme.typography.bodySmall, color = androidx.compose.material3.MaterialTheme.colorScheme.onSurfaceVariant)
             }
         }
     }

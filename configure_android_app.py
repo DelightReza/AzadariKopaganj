@@ -159,6 +159,8 @@ def update_android_manifest(manifest_path: Path) -> None:
     if not manifest_path.is_file():
         return
     text = manifest_path.read_text(encoding="utf-8")
+    changed = False
+
     required_permissions = [
         "android.permission.INTERNET",
         "android.permission.ACCESS_NETWORK_STATE",
@@ -173,8 +175,24 @@ def update_android_manifest(manifest_path: Path) -> None:
     if missing_tags and "</manifest>" in text:
         insertion = "\n".join(missing_tags) + "\n</manifest>"
         text = text.replace("</manifest>", insertion, 1)
-        manifest_path.write_text(text, encoding="utf-8")
+        changed = True
         print(f"[configure_android_app] Added {len(missing_tags)} permissions to {manifest_path}")
+
+    # Allow Activity.setRequestedOrientation() on Android 16+ (targetSdk 36) devices/tablets
+    compat_prop = "android.window.PROPERTY_COMPAT_ALLOW_RESTRICTED_RESIZABILITY"
+    if compat_prop not in text and "</application>" in text:
+        prop_tag = (
+            '        <property\n'
+            f'            android:name="{compat_prop}"\n'
+            '            android:value="true" />\n'
+            '    </application>'
+        )
+        text = text.replace("</application>", prop_tag, 1)
+        changed = True
+        print(f"[configure_android_app] Added Android 16 orientation compat property to {manifest_path}")
+
+    if changed:
+        manifest_path.write_text(text, encoding="utf-8")
 
 
 def install_background_sync_sources(android_dir: Path) -> None:

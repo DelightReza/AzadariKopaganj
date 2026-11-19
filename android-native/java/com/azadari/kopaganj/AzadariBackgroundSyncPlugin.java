@@ -166,6 +166,17 @@ public class AzadariBackgroundSyncPlugin extends Plugin {
         call.resolve(ret);
     }
 
+    @PluginMethod
+    public void setFullscreenMode(PluginCall call) {
+        boolean active = Boolean.TRUE.equals(call.getBoolean("active", false));
+        String orientation = call.getString("orientation", "unlocked");
+        Activity activity = getActivity();
+        boolean ok = MainActivity.applyFullscreenMode(activity, active, orientation);
+        JSObject ret = new JSObject();
+        ret.put("ok", ok);
+        call.resolve(ret);
+    }
+
     private static List<String> extractStringList(JSArray array) {
         List<String> result = new ArrayList<>();
         if (array == null) {

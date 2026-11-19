@@ -18,7 +18,10 @@ import {
   Volume2,
   VolumeX,
 } from 'lucide-react';
+import { Capacitor } from '@capacitor/core';
+import { ScreenOrientation } from '@capacitor/screen-orientation';
 import { ResilientThumbnail } from './ResilientThumbnail';
+import { setNativeFullscreenMode } from '../services/notificationSyncService';
 import {
   DEFAULT_QUALITY_LEVELS,
   formatPlayerTime,
@@ -224,11 +227,64 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
     };
   }, [isPlaying, speedMenuOpen, qualityMenuOpen, isScrubbing, scheduleHideHud]);
 
+  const isNativePlatform = Capacitor.isNativePlatform();
   const effectiveFullscreen = isFullscreen || pseudoFullscreen;
+  const wasFullscreenRef = useRef<boolean>(false);
+  // Never CSS-rotate when native Android APK (uses real Activity orientation) or when native :fullscreen is active
+  // (Chromium's UA `:fullscreen` overrides top/left/width/height with !important, breaking translate(-50%,-50%) rotate(90deg)).
   const pseudoRotateLandscape =
-    effectiveFullscreen && !isShort && orientationLockDenied && isPortraitTouchViewport;
+    !isNativePlatform &&
+    !isFullscreen &&
+    pseudoFullscreen &&
+    !isShort &&
+    orientationLockDenied &&
+    isPortraitTouchViewport;
 
   const lockOrientationForPlayer = useCallback(async (shortMode: boolean): Promise<boolean> => {
+    const targetMode: 'portrait' | 'landscape' = shortMode ? 'portrait' : 'landscape';
+
+    if (Capacitor.isNativePlatform()) {
+      let locked = false;
+
+      // 1. Official @capacitor/screen-orientation native plugin (auto-linked by cap sync)
+      try {
+        await ScreenOrientation.lock({ orientation: targetMode });
+        locked = true;
+      } catch {
+        // continue to direct bridge & custom plugin
+      }
+
+      // 2. Direct synchronous Android WebView @JavascriptInterface bridge (also hides system bars)
+      const androidBridge = (
+        window as typeof window & {
+          AzadariAndroidBridge?: {
+            setFullscreenMode?: (active: boolean, orientation: string) => boolean;
+          };
+        }
+      ).AzadariAndroidBridge;
+      if (androidBridge && typeof androidBridge.setFullscreenMode === 'function') {
+        try {
+          if (androidBridge.setFullscreenMode(true, targetMode)) {
+            locked = true;
+          }
+        } catch {
+          // ignore bridge errors
+        }
+      }
+
+      // 3. Custom Capacitor plugin fallback (also hides system bars & locks orientation)
+      const pluginOk = await setNativeFullscreenMode(true, targetMode);
+      if (pluginOk) {
+        locked = true;
+      }
+
+      if (locked) {
+        setOrientationLockDenied(false);
+        return true;
+      }
+    }
+
+    // 4. Standard Web Screen Orientation API (Android Chrome, installed PWA, fallback)
     try {
       const orientation = screen.orientation as ScreenOrientation & {
         lock?: (mode: string) => Promise<void>;
@@ -256,6 +312,24 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
   const unlockOrientation = useCallback(() => {
     setOrientationLockDenied(false);
+    if (Capacitor.isNativePlatform()) {
+      void ScreenOrientation.unlock().catch(() => {});
+      const androidBridge = (
+        window as typeof window & {
+          AzadariAndroidBridge?: {
+            setFullscreenMode?: (active: boolean, orientation: string) => boolean;
+          };
+        }
+      ).AzadariAndroidBridge;
+      if (androidBridge && typeof androidBridge.setFullscreenMode === 'function') {
+        try {
+          androidBridge.setFullscreenMode(false, 'unlocked');
+        } catch {
+          // ignore bridge errors
+        }
+      }
+      void setNativeFullscreenMode(false, 'unlocked');
+    }
     try {
       const orientation = screen.orientation as ScreenOrientation & {
         unlock?: () => void;
@@ -307,8 +381,12 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
   useEffect(() => {
     if (effectiveFullscreen) {
+      wasFullscreenRef.current = true;
+      document.documentElement.dataset.azadariFullscreen = 'true';
       void lockOrientationForPlayer(isShort);
-    } else {
+    } else if (wasFullscreenRef.current) {
+      wasFullscreenRef.current = false;
+      delete document.documentElement.dataset.azadariFullscreen;
       unlockOrientation();
     }
   }, [effectiveFullscreen, isShort, lockOrientationForPlayer, unlockOrientation]);
@@ -358,7 +436,11 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
 
   useEffect(() => {
     return () => {
-      unlockOrientation();
+      if (wasFullscreenRef.current) {
+        wasFullscreenRef.current = false;
+        delete document.documentElement.dataset.azadariFullscreen;
+        unlockOrientation();
+      }
     };
   }, [unlockOrientation]);
 
@@ -929,6 +1011,15 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       return;
     }
 
+    // In Capacitor Android APK, BridgeWebChromeClient.onShowCustomView immediately calls
+    // onCustomViewHidden(), which breaks HTML5 requestFullscreen(). Use full-viewport
+    // immersive mode paired with native Activity orientation lock instead.
+    if (Capacitor.isNativePlatform()) {
+      setPseudoFullscreen(true);
+      await lockOrientationForPlayer(isShort);
+      return;
+    }
+
     try {
       if (typeof el.requestFullscreen === 'function') {
         await el.requestFullscreen({ navigationUI: 'hide' }).catch(() => el.requestFullscreen());
@@ -1089,14 +1180,19 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
   }, [selectedQuality, actualQuality]);
 
   const frameSizeClasses = pseudoRotateLandscape
-    ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 z-[60] w-[100dvh] h-[100vw]'
+    ? 'fixed top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 rotate-90 z-[9999] w-[100dvh] h-[100vw] flex items-center justify-center'
     : pseudoFullscreen
-      ? 'fixed inset-0 z-[60] w-screen h-[100dvh]'
+      ? 'fixed inset-0 z-[9999] w-full h-full flex items-center justify-center'
       : isFullscreen
-        ? 'w-full h-full'
+        ? 'w-full h-full flex items-center justify-center'
         : isShort
           ? 'aspect-[9/16] w-full max-w-[360px] sm:max-w-[400px] max-h-[78vh] mx-auto'
           : 'aspect-video w-full';
+
+  const mediaStageClasses =
+    effectiveFullscreen && !pseudoRotateLandscape
+      ? `relative overflow-hidden shrink-0 ${isShort ? 'azadari-fs-stage-9-16' : 'azadari-fs-stage-16-9'} ${isAdPlaying ? 'z-20' : ''}`
+      : `absolute inset-0 w-full h-full overflow-hidden ${isAdPlaying ? 'z-20' : ''}`;
 
   return (
     <div
@@ -1111,57 +1207,60 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
           setHudVisible(false);
         }
       }}
-      className={`@container group/player ${pseudoFullscreen || pseudoRotateLandscape ? '' : 'relative'} ${frameSizeClasses} bg-black overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] ${className}`}
+      className={`group/player ${effectiveFullscreen ? '' : '@container relative'} ${frameSizeClasses} bg-black overflow-hidden select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-[#FF0000] ${className}`}
     >
-      {/* 1A. Direct HTML5 Media Engine (if stream URL supplied) */}
-      {started && mediaUrl && (
-        <video
-          ref={nativeVideoRef}
-          src={mediaUrl}
-          autoPlay
-          playsInline
-          onPlay={() => {
-            setIsPlaying(true);
-            setIsBuffering(false);
-            setIsEnded(false);
-          }}
-          onPause={() => {
-            setIsPlaying(false);
-            setHudVisible(true);
-          }}
-          onWaiting={() => setIsBuffering(true)}
-          onCanPlay={() => setIsBuffering(false)}
-          onTimeUpdate={(e) => {
-            if (isScrubbing) return;
-            const el = e.currentTarget;
-            setCurrentTime(el.currentTime);
-            if (Number.isFinite(el.duration)) setDuration(el.duration);
-          }}
-          onEnded={() => {
-            setIsPlaying(false);
-            setIsEnded(true);
-            onEndedRef.current?.();
-          }}
-          onError={() => {
-            setIsBuffering(false);
-            setPlayerError('Unable to play video stream.');
-          }}
-          className="w-full h-full object-contain pointer-events-none"
-        />
-      )}
+      {/* 1. Aspect-Locked Video Stage (Fits 100% edge-to-edge centered in fullscreen on any screen ratio) */}
+      <div className={mediaStageClasses}>
+        {/* 1A. Direct HTML5 Media Engine (if stream URL supplied) */}
+        {started && mediaUrl && (
+          <video
+            ref={nativeVideoRef}
+            src={mediaUrl}
+            autoPlay
+            playsInline
+            onPlay={() => {
+              setIsPlaying(true);
+              setIsBuffering(false);
+              setIsEnded(false);
+            }}
+            onPause={() => {
+              setIsPlaying(false);
+              setHudVisible(true);
+            }}
+            onWaiting={() => setIsBuffering(true)}
+            onCanPlay={() => setIsBuffering(false)}
+            onTimeUpdate={(e) => {
+              if (isScrubbing) return;
+              const el = e.currentTarget;
+              setCurrentTime(el.currentTime);
+              if (Number.isFinite(el.duration)) setDuration(el.duration);
+            }}
+            onEnded={() => {
+              setIsPlaying(false);
+              setIsEnded(true);
+              onEndedRef.current?.();
+            }}
+            onError={() => {
+              setIsBuffering(false);
+              setPlayerError('Unable to play video stream.');
+            }}
+            className="w-full h-full object-contain pointer-events-none"
+          />
+        )}
 
-      {/* 1B. Video Playback Frame (100% interactive frame during ads so YouTube's native 'Sponsored' & 'Skip' button are visible/clickable; 300% vertical overscan during main video) */}
-      {started && !mediaUrl && (
-        <div
-          ref={ytHostRef}
-          aria-hidden="true"
-          className={
-            isAdPlaying
-              ? 'absolute inset-0 w-full h-full z-20 pointer-events-auto'
-              : 'absolute inset-x-0 -top-[100%] w-full h-[300%] pointer-events-none'
-          }
-        />
-      )}
+        {/* 1B. Video Playback Frame (100% interactive frame during ads so YouTube's native 'Sponsored' & 'Skip' button are visible/clickable; 300% vertical overscan during main video) */}
+        {started && !mediaUrl && (
+          <div
+            ref={ytHostRef}
+            aria-hidden="true"
+            className={
+              isAdPlaying
+                ? 'absolute inset-0 w-full h-full pointer-events-auto'
+                : 'absolute inset-x-0 -top-[100%] w-full h-[300%] pointer-events-none'
+            }
+          />
+        )}
+      </div>
 
       {/* 2. Poster / Pre-Play Shield / Paused / Ended Backdrop Overlay (Covers YouTube startup UI until first playing frame) */}
       {(!started || !hasPlayedOnce || (!isPlaying && !isBuffering) || isEnded) &&
@@ -1371,7 +1470,7 @@ export const InbuiltVideoPlayer: React.FC<InbuiltVideoPlayerProps> = ({
       {/* 5. Custom Inbuilt Control Bar (3-Row Layout: Bar -> Time -> Other; hidden during ads so bottom-right native Skip button stays clear) */}
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/75 to-transparent pt-3 sm:pt-5 pb-1.5 sm:pb-2.5 px-3 sm:px-4 transition-opacity duration-200 ${
+        className={`@container absolute inset-x-0 bottom-0 z-30 bg-gradient-to-t from-black/95 via-black/75 to-transparent pt-3 sm:pt-5 pb-1.5 sm:pb-2.5 px-3 sm:px-4 transition-opacity duration-200 ${
           !isAdPlaying && (hudVisible || !isPlaying || !started || isScrubbing)
             ? 'opacity-100'
             : 'opacity-0 pointer-events-none'

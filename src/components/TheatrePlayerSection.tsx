@@ -250,8 +250,8 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
           <div
             className={
               theaterWide
-                ? 'w-full'
-                : `w-full lg:flex-1 min-w-0 lg:sticky lg:top-[76px] ${
+                ? 'azadari-player-column w-full'
+                : `azadari-player-column w-full lg:flex-1 min-w-0 lg:sticky lg:top-[76px] ${
                     pinMobileTheatre
                       ? 'max-lg:[@media(min-height:540px)]:shrink-0 max-lg:[@media(min-height:540px)]:pb-2.5 max-lg:[@media(min-height:540px)]:border-b max-lg:[@media(min-height:540px)]:border-black/[0.06] max-lg:[@media(min-height:540px)]:dark:border-white/[0.08]'
                       : ''
@@ -260,7 +260,7 @@ export const TheatrePlayerSection: React.FC<TheatrePlayerSectionProps> = ({
           >
             {/* Custom Inbuilt Video Player (9:16 for Shorts, 16:9 for Videos/Live) */}
             <div
-              className={`relative w-full rounded-2xl overflow-hidden bg-black ring-1 ring-black/10 dark:ring-white/10 shadow-2xl ${
+              className={`azadari-player-frame-wrapper relative w-full rounded-2xl overflow-hidden bg-black ring-1 ring-black/10 dark:ring-white/10 shadow-2xl ${
                 activeIsShort ? 'py-2 flex items-center justify-center' : 'aspect-video'
               }`}
             >

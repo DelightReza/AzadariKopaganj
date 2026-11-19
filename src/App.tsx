@@ -540,6 +540,19 @@ export default function App() {
     };
 
     azadariWindow.__azadariHandleAndroidBack = () => {
+      const docWithWebkit = document as Document & {
+        webkitFullscreenElement?: Element | null;
+        webkitExitFullscreen?: () => Promise<void> | void;
+      };
+      if (document.fullscreenElement || docWithWebkit.webkitFullscreenElement) {
+        if (document.fullscreenElement) {
+          void document.exitFullscreen().catch(() => {});
+        } else {
+          void docWithWebkit.webkitExitFullscreen?.();
+        }
+        return true;
+      }
+
       const historyState =
         typeof window.history.state === 'object' && window.history.state
           ? window.history.state
@@ -981,7 +994,7 @@ export default function App() {
                 <div className="space-y-9 sm:space-y-11">
                   {live.is_live && live.youtube_id && (
                     <div className="rounded-2xl bg-white dark:bg-[#141418] border border-[#DC2626]/30 p-3.5 sm:p-5 shadow-md grid grid-cols-1 lg:grid-cols-12 gap-5 items-center">
-                      <div className="lg:col-span-6 xl:col-span-5 relative aspect-video w-full rounded-xl overflow-hidden bg-black ring-1 ring-white/10 shadow-md">
+                      <div className="azadari-player-frame-wrapper lg:col-span-6 xl:col-span-5 relative aspect-video w-full rounded-xl overflow-hidden bg-black ring-1 ring-white/10 shadow-md">
                         <InbuiltVideoPlayer
                           key={live.youtube_id}
                           youtubeId={live.youtube_id}
@@ -1085,7 +1098,7 @@ export default function App() {
                         <Radio className="w-4 h-4 animate-pulse" />
                         <span>Live Now on Azadari Kopaganj</span>
                       </div>
-                      <div className="aspect-video w-full max-w-3xl rounded-xl overflow-hidden bg-black ring-1 ring-white/10">
+                      <div className="azadari-player-frame-wrapper aspect-video w-full max-w-3xl rounded-xl overflow-hidden bg-black ring-1 ring-white/10">
                         <InbuiltVideoPlayer
                           key={live.youtube_id}
                           youtubeId={live.youtube_id}

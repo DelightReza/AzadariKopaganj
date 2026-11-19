@@ -96,3 +96,46 @@
     transition-duration: 0.01ms !important;
   }
 }
+
+.azadari-fs-stage-16-9 {
+  width: min(100vw, calc(100vh * 16 / 9));
+  height: min(100vh, calc(100vw * 9 / 16));
+  width: min(100vw, calc(100dvh * 16 / 9));
+  height: min(100dvh, calc(100vw * 9 / 16));
+}
+
+.azadari-fs-stage-9-16 {
+  width: min(100vw, calc(100vh * 9 / 16));
+  height: min(100vh, calc(100vw * 16 / 9));
+  width: min(100vw, calc(100dvh * 9 / 16));
+  height: min(100dvh, calc(100vw * 16 / 9));
+}
+
+html[data-azadari-fullscreen="true"],
+html[data-azadari-fullscreen="true"] body {
+  overflow: hidden !important;
+  overscroll-behavior: none !important;
+  background: #000000 !important;
+}
+
+html[data-azadari-fullscreen="true"] header,
+html[data-azadari-fullscreen="true"] nav[aria-label="Mobile Navigation"],
+html[data-azadari-fullscreen="true"] footer {
+  display: none !important;
+}
+
+html[data-azadari-fullscreen="true"] #watch,
+html[data-azadari-fullscreen="true"] .azadari-player-column {
+  position: static !important;
+  overflow: visible !important;
+  z-index: auto !important;
+}
+
+html[data-azadari-fullscreen="true"] .azadari-player-frame-wrapper {
+  position: static !important;
+  overflow: visible !important;
+  border-radius: 0 !important;
+  aspect-ratio: auto !important;
+  transform: none !important;
+  contain: none !important;
+}

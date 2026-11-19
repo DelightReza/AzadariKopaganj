@@ -26,6 +26,10 @@ export interface AzadariBackgroundSyncPlugin {
   setAlertsEnabled(options: { enabled: boolean }): Promise<{ enabled: boolean }>;
   triggerImmediateCheck(): Promise<{ queued: boolean }>;
   consumePendingRoute(): Promise<{ route: string | null }>;
+  setFullscreenMode(options: {
+    active: boolean;
+    orientation: 'landscape' | 'portrait' | 'unlocked';
+  }): Promise<{ ok: boolean }>;
   addListener(
     eventName: 'notificationRoute',
     listenerFunc: (data: { route: string }) => void
@@ -33,6 +37,21 @@ export interface AzadariBackgroundSyncPlugin {
 }
 
 const AzadariBackgroundSync = registerPlugin<AzadariBackgroundSyncPlugin>('AzadariBackgroundSync');
+
+export async function setNativeFullscreenMode(
+  active: boolean,
+  orientation: 'landscape' | 'portrait' | 'unlocked'
+): Promise<boolean> {
+  if (!Capacitor.isNativePlatform()) {
+    return false;
+  }
+  try {
+    const res = await AzadariBackgroundSync.setFullscreenMode({ active, orientation });
+    return Boolean(res?.ok);
+  } catch {
+    return false;
+  }
+}
 
 const SNAPSHOT_STORAGE_KEY = 'azadari_feed_snapshot_v1';
 const MAX_SNAPSHOT_IDS = 1500;

@@ -12,6 +12,15 @@ import {
   resolveEndpointTemplate,
 } from '../utils/archiveLogic';
 
+import {
+  ARCHIVE_CACHE_SCHEMA_VERSION,
+  readCachedArchiveBundle,
+  selectMonthsToRefresh,
+  writeCachedArchiveBundle,
+  type CachedArchiveRecord,
+  type CachedMonthSlice,
+} from './archiveCache';
+
 export const DEFAULT_GITHUB_OWNER = 'DelightReza';
 export const DEFAULT_GITHUB_REPO = 'AzadariKopaganj';
 export const DEFAULT_GITHUB_BRANCH = 'main';
@@ -22,32 +31,85 @@ export interface LoadedArchiveBundle {
   live: LiveNowState;
   videos: VideoItem[];
   posts: CommunityPost[];
+  fromCache?: boolean;
+  cacheRecord?: CachedArchiveRecord;
 }
 
-export async function fetchJsonSafe<T>(url: string, fallback: T): Promise<T> {
+export async function fetchJsonOrNull<T>(
+  url: string,
+  cacheMode: RequestCache = 'no-store'
+): Promise<T | null> {
   try {
     const response = await fetch(url, {
       headers: { Accept: 'application/json' },
-      cache: 'no-store',
+      cache: cacheMode,
     });
     if (!response.ok) {
-      return fallback;
+      return null;
     }
     return (await response.json()) as T;
   } catch {
-    return fallback;
+    return null;
   }
 }
 
+export async function fetchJsonSafe<T>(
+  url: string,
+  fallback: T,
+  cacheMode: RequestCache = 'no-store'
+): Promise<T> {
+  const data = await fetchJsonOrNull<T>(url, cacheMode);
+  return data === null ? fallback : data;
+}
+
+function flattenOrderedMonths(
+  config: AppConfig,
+  monthsByKey: Record<string, CachedMonthSlice>
+): { videos: VideoItem[]; posts: CommunityPost[] } {
+  const allVideos: VideoItem[] = [];
+  const seenVideoIds = new Set<string>();
+  const allPosts: CommunityPost[] = [];
+  const seenPostIds = new Set<string>();
+
+  const months = Array.isArray(config.available_months) ? config.available_months : [];
+  for (const month of months) {
+    const monthKey = `${month.yyyy}-${month.mm.padStart(2, '0')}`;
+    const slice = monthsByKey[monthKey];
+    if (!slice) continue;
+
+    for (const v of slice.videos) {
+      const vid = v.youtube_id || v.id;
+      if (vid && !seenVideoIds.has(vid)) {
+        seenVideoIds.add(vid);
+        allVideos.push(v);
+      }
+    }
+    for (const p of slice.posts) {
+      if (p.id && !seenPostIds.has(p.id)) {
+        seenPostIds.add(p.id);
+        allPosts.push(p);
+      }
+    }
+  }
+
+  return { videos: allVideos, posts: allPosts };
+}
+
 /**
- * Loads `config.json` first (Base Discovery Manifest), then fetches `assets/livenow.json`
- * and all monthly `videos.json` and `post.json` files discovered in `config.available_months`.
- * When running inside a Capacitor Android APK, it attempts to fetch the latest live files from
- * `https://raw.githubusercontent.com/DelightReza/AzadariKopaganj/main/` and falls back to bundled assets.
+ * Loads `config.json` and `assets/livenow.json` first, then performs smart incremental
+ * sync against the local IndexedDB cache:
+ * - On 90-second polls when `config.last_updated` hasn't changed, reuses all cached monthly
+ *   `videos.json` and `post.json` slices (fetching only 2 tiny files instead of 184+).
+ * - When `config.last_updated` changes, fetches only newly added/changed months + the newest 2 months.
+ * - Offline in Capacitor Android APK: serves the persisted IndexedDB cache if available, or falls
+ *   back cleanly to bundled `./` APK assets on a first-launch offline start.
  */
-export async function loadFullArchiveBundle(baseUrl: string = './'): Promise<LoadedArchiveBundle> {
+export async function loadFullArchiveBundle(
+  baseUrl: string = './',
+  existingCache?: CachedArchiveRecord | null
+): Promise<LoadedArchiveBundle> {
   const isNative = Capacitor.isNativePlatform();
-  const effectiveBase = isNative ? REMOTE_RAW_BASE : baseUrl;
+  const cached = existingCache !== undefined ? existingCache : await readCachedArchiveBundle();
 
   const fallbackConfig: AppConfig = {
     version: 1,
@@ -62,131 +124,183 @@ export async function loadFullArchiveBundle(baseUrl: string = './'): Promise<Loa
       videos_month_template: 'assets/{yyyy}/{mm}/videos.json',
       post_month_template: 'assets/{yyyy}/{mm}/post.json',
     },
-    video_json_files: [
-      'assets/2026/10/videos.json',
-      'assets/2026/09/videos.json',
-      'assets/2026/08/videos.json',
-    ],
-    post_json_files: [
-      'assets/2026/10/post.json',
-      'assets/2026/09/post.json',
-      'assets/2026/08/post.json',
-    ],
+    video_json_files: [],
+    post_json_files: [],
     latest_video_id: 'GOOvPNTUmtg',
     latest_video_title: 'Live Jashne Syedus Sajideen as Kopaganj, Mau | 14 Jamadiul Awwal 1448H/2026',
     is_live: false,
-    available_months: [
-      {
-        month_year: 'October 2026',
-        yyyy: '2026',
-        mm: '10',
-        video_count: 1,
-        videos_path: 'assets/2026/10/videos.json',
-        post_path: 'assets/2026/10/post.json',
-      },
-      {
-        month_year: 'September 2026',
-        yyyy: '2026',
-        mm: '09',
-        video_count: 4,
-        videos_path: 'assets/2026/09/videos.json',
-        post_path: 'assets/2026/09/post.json',
-      },
-      {
-        month_year: 'August 2026',
-        yyyy: '2026',
-        mm: '08',
-        video_count: 10,
-        videos_path: 'assets/2026/08/videos.json',
-        post_path: 'assets/2026/08/post.json',
-      },
-    ],
+    available_months: [],
   };
 
-  let config = await fetchJsonSafe<AppConfig>(
+  let effectiveBase = isNative ? REMOTE_RAW_BASE : baseUrl;
+  let source: 'remote' | 'bundled' = 'remote';
+
+  let config = await fetchJsonOrNull<AppConfig>(
     normalizeRelativeAssetUrl('config.json', effectiveBase),
-    fallbackConfig
+    'no-store'
   );
-  if (isNative && (!config.available_months || config.available_months.length === 0)) {
-    config = await fetchJsonSafe<AppConfig>(normalizeRelativeAssetUrl('config.json', './'), fallbackConfig);
+
+  // Offline / unreachable handling
+  if (!config || !Array.isArray(config.available_months) || config.available_months.length === 0) {
+    // 1. If we already have a cached archive (from a previous remote or bundled load), return it immediately
+    if (cached && cached.videos.length > 0) {
+      return {
+        config: cached.config,
+        live: cached.live,
+        videos: cached.videos,
+        posts: cached.posts,
+        fromCache: true,
+        cacheRecord: cached,
+      };
+    }
+
+    // 2. First launch while offline in Android APK: switch effectiveBase to bundled './' assets
+    if (isNative) {
+      effectiveBase = './';
+      source = 'bundled';
+      config = await fetchJsonOrNull<AppConfig>(
+        normalizeRelativeAssetUrl('config.json', './'),
+        'default'
+      );
+    }
   }
 
-  // Single live stream endpoint: assets/livenow.json
+  if (!config) {
+    config = cached?.config || fallbackConfig;
+  }
+
+  // Always check assets/livenow.json fresh (tiny file, drives live banner & notifications)
   const liveRelPath = config.endpoints?.live || 'assets/livenow.json';
-  const live = await fetchJsonSafe<LiveNowState>(
+  const fetchedLive = await fetchJsonOrNull<LiveNowState>(
     normalizeRelativeAssetUrl(liveRelPath, effectiveBase),
-    { is_live: false, title: '', youtube_id: '' }
+    'no-store'
   );
+  const live: LiveNowState = fetchedLive || cached?.live || {
+    is_live: false,
+    title: '',
+    youtube_id: '',
+  };
+
+  const resolvedLive: LiveNowState = {
+    is_live: Boolean(live.is_live || config.is_live),
+    title: live.title || (config.is_live ? config.latest_video_title : ''),
+    youtube_id: live.youtube_id || (config.is_live ? config.latest_video_id : ''),
+  };
 
   const videoTemplate = config.endpoints?.videos_month_template || 'assets/{yyyy}/{mm}/videos.json';
   const postTemplate = config.endpoints?.post_month_template || 'assets/{yyyy}/{mm}/post.json';
 
-  const months = Array.isArray(config.available_months) ? config.available_months : [];
+  // Only reuse per-month cache if it came from the same/better source (remote overrides bundled)
+  const reusableMonthsByKey: Record<string, CachedMonthSlice> =
+    cached && (source === 'bundled' || cached.source === 'remote')
+      ? { ...cached.monthsByKey }
+      : {};
+  const prevConfigForDiff =
+    cached && (source === 'bundled' || cached.source === 'remote') ? cached.config : null;
 
-  const monthResults: Array<{ videos: VideoItem[]; posts: CommunityPost[] }> = [];
-  const batchSize = 18;
-  for (let i = 0; i < months.length; i += batchSize) {
-    const slice = months.slice(i, i + batchSize);
-    const batch = await Promise.all(
-      slice.map(async (month) => {
-        const monthKey = `${month.yyyy}-${month.mm.padStart(2, '0')}`;
-        const vPath =
-          month.videos_path || resolveEndpointTemplate(videoTemplate, month.yyyy, month.mm);
-        const pPath =
-          month.post_path || resolveEndpointTemplate(postTemplate, month.yyyy, month.mm);
+  const monthsToFetch = selectMonthsToRefresh(prevConfigForDiff, config, reusableMonthsByKey);
 
-        const [monthVideos, monthPosts] = await Promise.all([
-          fetchJsonSafe<VideoItem[]>(normalizeRelativeAssetUrl(vPath, effectiveBase), []),
-          fetchJsonSafe<CommunityPost[]>(normalizeRelativeAssetUrl(pPath, effectiveBase), []),
-        ]);
+  if (monthsToFetch.length > 0) {
+    const batchSize = 18;
+    const monthCacheMode: RequestCache = source === 'bundled' ? 'default' : 'no-store';
 
-        return {
-          videos: monthVideos.map((v) => ({
-            ...v,
-            month_key: monthKey,
-            month_label: month.month_year,
-          })),
-          posts: monthPosts.map((p) => ({
-            ...p,
-            month_key: monthKey,
-            month_label: month.month_year,
-          })),
-        };
-      })
-    );
-    monthResults.push(...batch);
+    for (let i = 0; i < monthsToFetch.length; i += batchSize) {
+      const slice = monthsToFetch.slice(i, i + batchSize);
+      await Promise.all(
+        slice.map(async (month) => {
+          const monthKey = `${month.yyyy}-${month.mm.padStart(2, '0')}`;
+          const vPath =
+            month.videos_path || resolveEndpointTemplate(videoTemplate, month.yyyy, month.mm);
+          const pPath =
+            month.post_path || resolveEndpointTemplate(postTemplate, month.yyyy, month.mm);
+
+          const [fetchedVideos, fetchedPosts] = await Promise.all([
+            fetchJsonOrNull<VideoItem[]>(
+              normalizeRelativeAssetUrl(vPath, effectiveBase),
+              monthCacheMode
+            ),
+            fetchJsonOrNull<CommunityPost[]>(
+              normalizeRelativeAssetUrl(pPath, effectiveBase),
+              monthCacheMode
+            ),
+          ]);
+
+          const prevSlice = reusableMonthsByKey[monthKey];
+
+          // If a remote month request fails transiently, fall back to cached slice or bundled './' in APK
+          let resolvedVideos = fetchedVideos;
+          let resolvedPosts = fetchedPosts;
+          if (resolvedVideos === null && !prevSlice && isNative && effectiveBase !== './') {
+            resolvedVideos = await fetchJsonOrNull<VideoItem[]>(
+              normalizeRelativeAssetUrl(vPath, './'),
+              'default'
+            );
+          }
+          if (resolvedPosts === null && !prevSlice && isNative && effectiveBase !== './') {
+            resolvedPosts = await fetchJsonOrNull<CommunityPost[]>(
+              normalizeRelativeAssetUrl(pPath, './'),
+              'default'
+            );
+          }
+
+          const finalVideos =
+            resolvedVideos !== null
+              ? resolvedVideos.map((v) => ({
+                  ...v,
+                  month_key: monthKey,
+                  month_label: month.month_year,
+                }))
+              : prevSlice?.videos || [];
+
+          const finalPosts =
+            resolvedPosts !== null
+              ? resolvedPosts.map((p) => ({
+                  ...p,
+                  month_key: monthKey,
+                  month_label: month.month_year,
+                }))
+              : prevSlice?.posts || [];
+
+          if (resolvedVideos !== null || resolvedPosts !== null || prevSlice) {
+            reusableMonthsByKey[monthKey] = {
+              month_key: monthKey,
+              video_count: resolvedVideos !== null ? month.video_count : -1,
+              videos_path: vPath,
+              post_path: pPath,
+              videos: finalVideos,
+              posts: finalPosts,
+            };
+          }
+        })
+      );
+    }
   }
 
-  const allVideos: VideoItem[] = [];
-  const seenVideoIds = new Set<string>();
-  const allPosts: CommunityPost[] = [];
-  const seenPostIds = new Set<string>();
+  const { videos: allVideos, posts: allPosts } = flattenOrderedMonths(config, reusableMonthsByKey);
 
-  for (const res of monthResults) {
-    for (const v of res.videos) {
-      const vid = v.youtube_id || v.id;
-      if (vid && !seenVideoIds.has(vid)) {
-        seenVideoIds.add(vid);
-        allVideos.push(v);
-      }
-    }
-    for (const p of res.posts) {
-      if (p.id && !seenPostIds.has(p.id)) {
-        seenPostIds.add(p.id);
-        allPosts.push(p);
-      }
-    }
+  const nextCacheRecord: CachedArchiveRecord = {
+    schemaVersion: ARCHIVE_CACHE_SCHEMA_VERSION,
+    cachedAt: Date.now(),
+    source,
+    config,
+    live: resolvedLive,
+    monthsByKey: reusableMonthsByKey,
+    videos: allVideos,
+    posts: allPosts,
+  };
+
+  // Persist asynchronously so UI renders immediately
+  if (allVideos.length > 0 || allPosts.length > 0) {
+    void writeCachedArchiveBundle(nextCacheRecord);
   }
 
   return {
     config,
-    live: {
-      is_live: Boolean(live.is_live || config.is_live),
-      title: live.title || (config.is_live ? config.latest_video_title : ''),
-      youtube_id: live.youtube_id || (config.is_live ? config.latest_video_id : ''),
-    },
+    live: resolvedLive,
     videos: allVideos,
     posts: allPosts,
+    fromCache: monthsToFetch.length === 0 && Boolean(cached),
+    cacheRecord: nextCacheRecord,
   };
 }
 

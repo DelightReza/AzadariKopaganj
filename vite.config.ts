@@ -103,7 +103,7 @@ export default defineConfig(() => {
               options: {
                 cacheName: 'azadari-json-manifests',
                 expiration: {
-                  maxEntries: 50,
+                  maxEntries: 300,
                   maxAgeSeconds: 60 * 60 * 24 * 30,
                 },
                 cacheableResponse: {

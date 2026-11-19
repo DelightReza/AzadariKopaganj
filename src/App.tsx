@@ -42,7 +42,8 @@ import {
   type ParsedAppRoute,
   type YouTubeSectionTab,
 } from './utils/appRouting';
-import { loadFullArchiveBundle } from './services/archiveService';
+import { loadFullArchiveBundle, type LoadedArchiveBundle } from './services/archiveService';
+import { readCachedArchiveBundle, type CachedArchiveRecord } from './services/archiveCache';
 import {
   initBackgroundNotificationSync,
   processFeedSyncNotifications,
@@ -134,6 +135,8 @@ export default function App() {
   const inAppNavDepthRef = useRef<number>(0);
   const scrollCacheRef = useRef<Map<string, number>>(new Map());
   const lastFetchAtRef = useRef<number>(0);
+  const cachedArchiveRef = useRef<CachedArchiveRecord | null>(null);
+  const isFetchingRef = useRef<boolean>(false);
 
   const currentRouteRef = useRef<ParsedAppRoute>(initialRoute);
   currentRouteRef.current = {
@@ -324,56 +327,97 @@ export default function App() {
     };
   }, [navigateFromNotification]);
 
-  const fetchArchive = useCallback(async () => {
-    try {
-      const loaded = await loadFullArchiveBundle('./');
-      lastFetchAtRef.current = Date.now();
-      setConfig(loaded.config);
-      setLive(loaded.live);
-      setVideos(loaded.videos);
-      setPosts(loaded.posts);
-      void processFeedSyncNotifications(loaded);
+  const applyArchiveBundle = useCallback((loaded: LoadedArchiveBundle) => {
+    setConfig(loaded.config);
+    setLive(loaded.live);
+    setVideos(loaded.videos);
+    setPosts(loaded.posts);
 
-      setActiveVideo((prev) => {
-        const targetWatchId = desiredWatchIdRef.current;
-        if (targetWatchId) {
-          const matchTarget = loaded.videos.find((v) => (v.youtube_id || v.id) === targetWatchId);
-          return matchTarget || prev || buildFallbackVideoItem(targetWatchId);
-        }
-        if (prev) return prev;
-        const matchLatest = loaded.videos.find(
-          (v) => (v.youtube_id || v.id) === loaded.config.latest_video_id
-        );
-        return matchLatest || loaded.videos[0] || null;
-      });
-
-      if (desiredLiveRef.current && loaded.live.is_live && loaded.live.youtube_id) {
-        setIsPlayingLive(true);
+    setActiveVideo((prev) => {
+      const targetWatchId = desiredWatchIdRef.current;
+      if (targetWatchId) {
+        const matchTarget = loaded.videos.find((v) => (v.youtube_id || v.id) === targetWatchId);
+        return matchTarget || prev || buildFallbackVideoItem(targetWatchId);
       }
-    } catch (err) {
-      console.error('Error loading Azadari Kopaganj archive:', err);
-    } finally {
-      setLoading(false);
+      if (prev) return prev;
+      const matchLatest = loaded.videos.find(
+        (v) => (v.youtube_id || v.id) === loaded.config.latest_video_id
+      );
+      return matchLatest || loaded.videos[0] || null;
+    });
+
+    if (desiredLiveRef.current && loaded.live.is_live && loaded.live.youtube_id) {
+      setIsPlayingLive(true);
     }
   }, []);
 
+  const fetchArchive = useCallback(async () => {
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
+    try {
+      const loaded = await loadFullArchiveBundle('./', cachedArchiveRef.current);
+      lastFetchAtRef.current = Date.now();
+      if (loaded.cacheRecord) {
+        cachedArchiveRef.current = loaded.cacheRecord;
+      }
+      applyArchiveBundle(loaded);
+      void processFeedSyncNotifications(loaded);
+    } catch (err) {
+      console.error('Error loading Azadari Kopaganj archive:', err);
+    } finally {
+      isFetchingRef.current = false;
+      setLoading(false);
+    }
+  }, [applyArchiveBundle]);
+
   useEffect(() => {
-    fetchArchive();
-  }, [fetchArchive]);
+    let active = true;
+    const bootstrap = async () => {
+      // 1. Instant Startup Cache (Stale-While-Revalidate): hydrate from IndexedDB/localStorage immediately
+      const cached = await readCachedArchiveBundle();
+      if (active && cached && (cached.videos.length > 0 || cached.posts.length > 0)) {
+        cachedArchiveRef.current = cached;
+        applyArchiveBundle({
+          config: cached.config,
+          live: cached.live,
+          videos: cached.videos,
+          posts: cached.posts,
+          fromCache: true,
+          cacheRecord: cached,
+        });
+        setLoading(false);
+      }
+
+      // 2. Smart incremental background revalidation (only fetches changed months + live status)
+      if (active) {
+        await fetchArchive();
+      }
+    };
+
+    void bootstrap();
+    return () => {
+      active = false;
+    };
+  }, [applyArchiveBundle, fetchArchive]);
 
   useEffect(() => {
     const interval = setInterval(() => {
-      fetchArchive();
+      void fetchArchive();
     }, 90_000);
     const onVisibilityChange = () => {
       if (!document.hidden && Date.now() - lastFetchAtRef.current > 60_000) {
-        fetchArchive();
+        void fetchArchive();
       }
     };
+    const onOnline = () => {
+      void fetchArchive();
+    };
     document.addEventListener('visibilitychange', onVisibilityChange);
+    window.addEventListener('online', onOnline);
     return () => {
       clearInterval(interval);
       document.removeEventListener('visibilitychange', onVisibilityChange);
+      window.removeEventListener('online', onOnline);
     };
   }, [fetchArchive]);
 

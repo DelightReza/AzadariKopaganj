@@ -20,6 +20,8 @@ import {
 } from './archiveLogic';
 import { formatPlayerTime, formatQualityLabel } from './youtubePlayerApi';
 import { buildAppHash, DEFAULT_APP_ROUTE, parseAppRoute } from './appRouting';
+import { selectMonthsToRefresh, type CachedMonthSlice } from '../services/archiveCache';
+import type { AppConfig } from '../types/archive';
 
 test('resolveEndpointTemplate replaces {yyyy} and zero-pads {mm}', () => {
   assert.equal(
@@ -427,4 +429,117 @@ test('filterVideos separates live streams from posted videos and supports shorts
     ['stream1', 'upload1']
   );
 });
+
+test('selectMonthsToRefresh skips unchanged cached months and only refreshes changed/missing/newest months', () => {
+  const baseConfig = (lastUpdated: string, octCount = 12): AppConfig => ({
+    version: 1,
+    channel_id: 'UCyCIC43pbujKarf1irIjtrA',
+    channel_name: 'Azadari Kopaganj',
+    channel_url: 'https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA',
+    rss_url: '',
+    live_url: '',
+    last_updated: lastUpdated,
+    endpoints: {
+      live: 'assets/livenow.json',
+      videos_month_template: 'assets/{yyyy}/{mm}/videos.json',
+      post_month_template: 'assets/{yyyy}/{mm}/post.json',
+    },
+    video_json_files: [],
+    post_json_files: [],
+    latest_video_id: 'abc12345678',
+    latest_video_title: 'Latest',
+    is_live: false,
+    available_months: [
+      {
+        yyyy: '2026',
+        mm: '11',
+        month_year: 'November 2026',
+        video_count: 4,
+        videos_path: 'assets/2026/11/videos.json',
+        post_path: 'assets/2026/11/post.json',
+      },
+      {
+        yyyy: '2026',
+        mm: '10',
+        month_year: 'October 2026',
+        video_count: octCount,
+        videos_path: 'assets/2026/10/videos.json',
+        post_path: 'assets/2026/10/post.json',
+      },
+      {
+        yyyy: '2026',
+        mm: '09',
+        month_year: 'September 2026',
+        video_count: 8,
+        videos_path: 'assets/2026/09/videos.json',
+        post_path: 'assets/2026/09/post.json',
+      },
+      {
+        yyyy: '2026',
+        mm: '08',
+        month_year: 'August 2026',
+        video_count: 6,
+        videos_path: 'assets/2026/08/videos.json',
+        post_path: 'assets/2026/08/post.json',
+      },
+    ],
+  });
+
+  const prev = baseConfig('2026-11-10T10:00:00Z', 12);
+  const cachedMonths: Record<string, CachedMonthSlice> = {
+    '2026-11': {
+      month_key: '2026-11',
+      video_count: 4,
+      videos_path: 'assets/2026/11/videos.json',
+      post_path: 'assets/2026/11/post.json',
+      videos: [],
+      posts: [],
+    },
+    '2026-10': {
+      month_key: '2026-10',
+      video_count: 12,
+      videos_path: 'assets/2026/10/videos.json',
+      post_path: 'assets/2026/10/post.json',
+      videos: [],
+      posts: [],
+    },
+    '2026-09': {
+      month_key: '2026-09',
+      video_count: 8,
+      videos_path: 'assets/2026/09/videos.json',
+      post_path: 'assets/2026/09/post.json',
+      videos: [],
+      posts: [],
+    },
+    '2026-08': {
+      month_key: '2026-08',
+      video_count: 6,
+      videos_path: 'assets/2026/08/videos.json',
+      post_path: 'assets/2026/08/post.json',
+      videos: [],
+      posts: [],
+    },
+  };
+
+  // 1. Unchanged config.last_updated + all months cached -> zero monthly fetches
+  assert.deepEqual(selectMonthsToRefresh(prev, prev, cachedMonths), []);
+
+  // 2. Updated config.last_updated -> refreshes newest 2 months + any older month whose count changed
+  const updated = baseConfig('2026-11-10T11:00:00Z', 12);
+  updated.available_months[3].video_count = 7; // August changed from 6 -> 7
+  assert.deepEqual(
+    selectMonthsToRefresh(prev, updated, cachedMonths).map((m) => `${m.yyyy}-${m.mm}`),
+    ['2026-11', '2026-10', '2026-08']
+  );
+
+  // 3. Missing month or failed month (video_count: -1) is fetched even when last_updated matches
+  const partialCache = { ...cachedMonths };
+  delete partialCache['2026-09'];
+  partialCache['2026-08'] = { ...partialCache['2026-08'], video_count: -1 };
+  assert.deepEqual(
+    selectMonthsToRefresh(prev, prev, partialCache).map((m) => `${m.yyyy}-${m.mm}`),
+    ['2026-09', '2026-08']
+  );
+});
+
 

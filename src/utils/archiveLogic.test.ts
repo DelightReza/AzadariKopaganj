@@ -376,5 +376,55 @@ test('parseAppRoute and buildAppHash preserve tabs, watch videos, and filters ac
   assert.equal(liveWatch.isLiveStream, true);
   assert.equal(liveWatch.section, 'live');
   assert.equal(buildAppHash(liveWatch), '#/watch/live?from=live');
+
+  const shortsRoute = parseAppRoute('#/videos?topic=shorts');
+  assert.equal(shortsRoute.section, 'videos');
+  assert.equal(shortsRoute.videoTopic, 'shorts');
+  assert.equal(buildAppHash(shortsRoute), '#/videos?topic=shorts');
+});
+
+test('filterVideos separates live streams from posted videos and supports shorts topic chip', () => {
+  const mixed = [
+    {
+      id: 'stream1',
+      youtube_id: 'stream1',
+      title: 'Live Jashn Kopaganj',
+      published: '2026-11-10T10:00:00Z',
+      thumbnail: '',
+      is_stream: true,
+    },
+    {
+      id: 'upload1',
+      youtube_id: 'upload1',
+      title: 'Jashn Highlight Upload (not a stream)',
+      published: '2026-11-09T10:00:00Z',
+      thumbnail: '',
+    },
+    {
+      id: 'short1',
+      youtube_id: 'short1',
+      title: 'Karbala Clip',
+      published: '2026-11-08T10:00:00Z',
+      thumbnail: '',
+      is_short: true,
+    },
+  ];
+
+  assert.deepEqual(
+    filterVideos(mixed, { streamMode: 'live' }).map((v) => v.id),
+    ['stream1']
+  );
+  assert.deepEqual(
+    filterVideos(mixed, { streamMode: 'videos' }).map((v) => v.id),
+    ['upload1', 'short1']
+  );
+  assert.deepEqual(
+    filterVideos(mixed, { streamMode: 'videos', topic: 'shorts' }).map((v) => v.id),
+    ['short1']
+  );
+  assert.deepEqual(
+    filterVideos(mixed, { streamMode: 'all', searchQuery: 'jashn' }).map((v) => v.id),
+    ['stream1', 'upload1']
+  );
 });
 

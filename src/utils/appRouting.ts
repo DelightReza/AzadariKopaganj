@@ -15,7 +15,14 @@ export interface ParsedAppRoute {
 }
 
 const VALID_SECTIONS = new Set<YouTubeSectionTab>(['home', 'live', 'videos', 'posts']);
-const VALID_TOPICS = new Set<VideoTopicFilter>(['all', 'jashn', 'majlis', 'nauha', 'qaseeda']);
+const VALID_TOPICS = new Set<VideoTopicFilter>([
+  'all',
+  'jashn',
+  'majlis',
+  'nauha',
+  'qaseeda',
+  'shorts',
+]);
 
 export const DEFAULT_APP_ROUTE: ParsedAppRoute = {
   section: 'home',

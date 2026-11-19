@@ -264,13 +264,18 @@ export function detectFeedUpdates(
   return { notifications, nextSnapshot };
 }
 
-export type VideoTopicFilter = 'all' | 'jashn' | 'majlis' | 'nauha' | 'qaseeda';
+export type VideoTopicFilter = 'all' | 'jashn' | 'majlis' | 'nauha' | 'qaseeda' | 'shorts';
+
+export type VideoStreamFilterMode = 'all' | 'live' | 'videos';
 
 /**
  * Matches video titles against Azadari Kopaganj genre categories with spelling variants.
  */
 export function matchesVideoTopic(title: string, topic: VideoTopicFilter): boolean {
   if (topic === 'all') return true;
+  if (topic === 'shorts') {
+    return /#shorts?\b|play short/i.test(title);
+  }
   if (topic === 'jashn') {
     return /\b(jash[ae]?n(?:e|-\w*)?|jashne\w*|milad\w*|wilad\w*|m[ae]hfil\w*)\b|جشن|میلاد|ولادت|محفل|जश्न/i.test(
       title
@@ -296,6 +301,7 @@ export interface VideoFilterOptions {
   searchQuery?: string;
   monthKey?: string; // "all", "YYYY", or "YYYY-MM"
   topic?: VideoTopicFilter;
+  streamMode?: VideoStreamFilterMode;
   watchlistOnly?: boolean;
   watchlistIds?: string[];
 }
@@ -304,15 +310,26 @@ export function filterVideos(videos: VideoItem[], options: VideoFilterOptions): 
   const query = (options.searchQuery || '').trim().toLowerCase();
   const monthKey = options.monthKey || 'all';
   const topic = options.topic || 'all';
+  const streamMode = options.streamMode || 'all';
   const watchlistSet = new Set(options.watchlistIds || []);
 
   return videos
     .filter((video) => {
       const vid = video.youtube_id || video.id;
+      if (streamMode === 'live' && !video.is_stream) {
+        return false;
+      }
+      if (streamMode === 'videos' && video.is_stream) {
+        return false;
+      }
       if (options.watchlistOnly && !watchlistSet.has(vid)) {
         return false;
       }
-      if (topic !== 'all' && !matchesVideoTopic(video.title || '', topic)) {
+      if (topic === 'shorts') {
+        if (!isShortVideo(video)) {
+          return false;
+        }
+      } else if (topic !== 'all' && !matchesVideoTopic(video.title || '', topic)) {
         return false;
       }
       if (monthKey !== 'all') {

@@ -442,6 +442,13 @@ export default function App() {
     desiredLiveRef.current = false;
     setActiveSection(section);
     setWatchingPlayerOpen(false);
+    setVisibleVideoCount(48);
+
+    const nextTopic: VideoTopicFilter =
+      section === 'live' && selectedTopicChip === 'shorts' ? 'all' : selectedTopicChip;
+    if (nextTopic !== selectedTopicChip) {
+      setSelectedTopicChip(nextTopic);
+    }
 
     if (alreadyOnSection) {
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -455,6 +462,7 @@ export default function App() {
         watching: false,
         watchId: null,
         isLiveStream: false,
+        videoTopic: nextTopic,
       },
       'push',
       'top'
@@ -549,9 +557,20 @@ export default function App() {
     [videos, selectedQueueMonth]
   );
 
+  const postedVideos = useMemo(
+    () => videos.filter((v) => !v.is_stream),
+    [videos]
+  );
+
+  const allLiveStreamVideos = useMemo(
+    () => videos.filter((v) => Boolean(v.is_stream)),
+    [videos]
+  );
+
   const filteredGridVideos = useMemo(
     () =>
       filterVideos(videos, {
+        streamMode: videoSearchQuery.trim() ? 'all' : 'videos',
         monthKey: selectedVideoMonth,
         searchQuery: videoSearchQuery,
         topic: selectedTopicChip,
@@ -563,10 +582,12 @@ export default function App() {
   const liveStreamVideos = useMemo(
     () =>
       filterVideos(videos, {
+        streamMode: 'live',
         monthKey: selectedVideoMonth,
         searchQuery: videoSearchQuery,
-      }).filter((v) => Boolean(v.is_stream) || /live|jashn/i.test(v.title)),
-    [videos, selectedVideoMonth, videoSearchQuery]
+        topic: selectedTopicChip === 'shorts' ? 'all' : selectedTopicChip,
+      }),
+    [videos, selectedVideoMonth, videoSearchQuery, selectedTopicChip]
   );
 
   const popularVideos = useMemo(
@@ -574,12 +595,41 @@ export default function App() {
     [videos, config?.popular_video_ids]
   );
 
-  const availableYears = useMemo(() => {
-    if (!config) return [];
-    return Array.from(new Set(config.available_months.map((m) => m.yyyy))).sort((a, b) =>
+  const postedMonthMeta = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of postedVideos) {
+      const key = v.month_key || v.published.slice(0, 7);
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const months = (config?.available_months || [])
+      .map((m) => {
+        const key = `${m.yyyy}-${m.mm.padStart(2, '0')}`;
+        return { ...m, key, count: counts.get(key) || 0 };
+      })
+      .filter((m) => m.count > 0);
+    const years = Array.from(new Set(months.map((m) => m.yyyy))).sort((a, b) =>
       b.localeCompare(a)
     );
-  }, [config]);
+    return { months, years };
+  }, [config, postedVideos]);
+
+  const liveMonthMeta = useMemo(() => {
+    const counts = new Map<string, number>();
+    for (const v of allLiveStreamVideos) {
+      const key = v.month_key || v.published.slice(0, 7);
+      if (key) counts.set(key, (counts.get(key) || 0) + 1);
+    }
+    const months = (config?.available_months || [])
+      .map((m) => {
+        const key = `${m.yyyy}-${m.mm.padStart(2, '0')}`;
+        return { ...m, key, count: counts.get(key) || 0 };
+      })
+      .filter((m) => m.count > 0);
+    const years = Array.from(new Set(months.map((m) => m.yyyy))).sort((a, b) =>
+      b.localeCompare(a)
+    );
+    return { months, years };
+  }, [config, allLiveStreamVideos]);
 
   const filteredPosts = useMemo(
     () =>
@@ -635,8 +685,7 @@ export default function App() {
             const relTime = formatYouTubeRelativeTime(video.published);
             const shortVideo = isShortVideo(video);
             const viewCountText = formatCompactViewCount(extractVideoViewCount(video));
-            const timeLabel =
-              video.is_stream || meta.wasStreamed ? `Streamed ${relTime}` : relTime;
+            const timeLabel = video.is_stream ? `Streamed ${relTime}` : relTime;
 
             return (
               <div
@@ -758,7 +807,10 @@ export default function App() {
                 setVideoSearchQuery(nextQuery);
                 if (
                   nextQuery.trim() &&
-                  (watchingPlayerOpen || (activeSection !== 'videos' && activeSection !== 'posts'))
+                  (watchingPlayerOpen ||
+                    (activeSection !== 'videos' &&
+                      activeSection !== 'live' &&
+                      activeSection !== 'posts'))
                 ) {
                   setWatchingPlayerOpen(false);
                   setActiveSection('videos');
@@ -798,7 +850,9 @@ export default function App() {
               type="button"
               onClick={() => {
                 const nextSection =
-                  activeSection === 'posts' ? 'posts' : 'videos';
+                  activeSection === 'posts' || activeSection === 'live'
+                    ? activeSection
+                    : 'videos';
                 setWatchingPlayerOpen(false);
                 setActiveSection(nextSection);
                 commitRoute(
@@ -938,7 +992,7 @@ export default function App() {
                         onClick={() => handleNavigateSection('videos')}
                         className="px-3.5 py-1.5 rounded-full bg-white dark:bg-[#17171D] border border-black/[0.08] dark:border-white/[0.1] hover:bg-[#EFEFF2] dark:hover:bg-[#23232B] text-xs font-semibold text-[#0F0F12] dark:text-[#F3F3F6] inline-flex items-center gap-1.5 whitespace-nowrap shrink-0 transition-colors cursor-pointer"
                       >
-                        <span className="tabular-nums">View all ({videos.length})</span>
+                        <span className="tabular-nums">View videos ({postedVideos.length})</span>
                         <ArrowRight className="w-3.5 h-3.5" />
                       </button>
                     </div>
@@ -978,7 +1032,7 @@ export default function App() {
                 </div>
               )}
 
-              {/* TAB 2: LIVE (Active Live Stream from assets/livenow.json + Past Live Streams) */}
+              {/* TAB 2: LIVE (Active Live Stream from assets/livenow.json + Past Live Streams only) */}
               {activeSection === 'live' && (
                 <div className="space-y-6">
                   {live.is_live && live.youtube_id && (
@@ -1009,18 +1063,116 @@ export default function App() {
                     </div>
                   )}
 
-                  {renderYouTubeVideoGrid(liveStreamVideos)}
+                  <div>
+                    <div className="pb-5 flex flex-wrap items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
+                        {(
+                          [
+                            { id: 'all', label: `All Live (${allLiveStreamVideos.length})` },
+                            { id: 'jashn', label: 'Jashn' },
+                            { id: 'majlis', label: 'Majlis' },
+                            { id: 'nauha', label: 'Nauha' },
+                            { id: 'qaseeda', label: 'Qaseeda' },
+                          ] as const
+                        ).map((chip) => {
+                          const effectiveTopic =
+                            selectedTopicChip === 'shorts' ? 'all' : selectedTopicChip;
+                          const active =
+                            effectiveTopic === chip.id && selectedVideoMonth === 'all';
+                          return (
+                            <button
+                              key={chip.id}
+                              type="button"
+                              onClick={() => {
+                                const nextTopic: VideoTopicFilter =
+                                  active && chip.id !== 'all' ? 'all' : chip.id;
+                                setSelectedTopicChip(nextTopic);
+                                setSelectedVideoMonth('all');
+                                setVisibleVideoCount(48);
+                                updateRouteFilters({ videoTopic: nextTopic, videoMonth: 'all' });
+                              }}
+                              className={`px-3.5 py-1.5 text-xs sm:text-[13px] font-medium rounded-full transition-colors whitespace-nowrap shrink-0 cursor-pointer ${
+                                active
+                                  ? 'bg-[#0F0F12] text-white dark:bg-white dark:text-[#0F0F12] font-semibold shadow-xs'
+                                  : 'bg-white dark:bg-[#17171D] text-[#45454D] dark:text-[#D4D4DC] border border-black/[0.07] dark:border-white/[0.08] hover:bg-[#EFEFF2] dark:hover:bg-[#23232B]'
+                              }`}
+                            >
+                              {chip.label}
+                            </button>
+                          );
+                        })}
+
+                        {liveMonthMeta.years.map((yyyy) => {
+                          const active = selectedVideoMonth === yyyy;
+                          return (
+                            <button
+                              key={yyyy}
+                              type="button"
+                              onClick={() => {
+                                const nextMonth = active ? 'all' : yyyy;
+                                setSelectedVideoMonth(nextMonth);
+                                setSelectedTopicChip('all');
+                                setVisibleVideoCount(48);
+                                updateRouteFilters({ videoMonth: nextMonth, videoTopic: 'all' });
+                              }}
+                              className={`px-3.5 py-1.5 text-xs sm:text-[13px] font-medium rounded-full transition-colors whitespace-nowrap shrink-0 tabular-nums cursor-pointer ${
+                                active
+                                  ? 'bg-[#0F0F12] text-white dark:bg-white dark:text-[#0F0F12] font-semibold shadow-xs'
+                                  : 'bg-white dark:bg-[#17171D] text-[#45454D] dark:text-[#D4D4DC] border border-black/[0.07] dark:border-white/[0.08] hover:bg-[#EFEFF2] dark:hover:bg-[#23232B]'
+                              }`}
+                            >
+                              {yyyy}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <select
+                        aria-label="Filter live streams by month"
+                        value={
+                          liveMonthMeta.months.some((m) => m.key === selectedVideoMonth)
+                            ? selectedVideoMonth
+                            : 'all'
+                        }
+                        onChange={(e) => {
+                          const nextMonth = e.target.value;
+                          setSelectedVideoMonth(nextMonth);
+                          setSelectedTopicChip('all');
+                          setVisibleVideoCount(48);
+                          updateRouteFilters({ videoMonth: nextMonth, videoTopic: 'all' });
+                        }}
+                        className="h-8.5 px-3.5 text-xs font-medium rounded-full bg-white dark:bg-[#17171D] text-[#0F0F12] dark:text-[#F3F3F6] border border-black/[0.08] dark:border-white/[0.1] focus:outline-none cursor-pointer"
+                      >
+                        <option value="all">
+                          Filter by Month ({liveMonthMeta.months.length} months)...
+                        </option>
+                        {liveMonthMeta.months.map((m) => (
+                          <option key={m.key} value={m.key}>
+                            {m.month_year} ({m.count})
+                          </option>
+                        ))}
+                      </select>
+                    </div>
+
+                    {renderYouTubeVideoGrid(liveStreamVideos)}
+                  </div>
                 </div>
               )}
 
-              {/* TAB 3: VIDEOS (Year, Month & Topic Filter Chips + Full 4-Column Video Grid) */}
+              {/* TAB 3: VIDEOS (Posted Videos & Shorts only; Search covers full archive) */}
               {activeSection === 'videos' && (
                 <div>
                   <div className="pb-5 flex flex-wrap items-center justify-between gap-2.5">
                     <div className="flex items-center gap-1.5 sm:gap-2 overflow-x-auto no-scrollbar py-0.5">
                       {(
                         [
-                          { id: 'all', label: `All (${videos.length})` },
+                          {
+                            id: 'all',
+                            label: videoSearchQuery.trim()
+                              ? `All Results (${filteredGridVideos.length})`
+                              : `All (${postedVideos.length})`,
+                          },
+                          { id: 'shorts', label: 'Shorts' },
                           { id: 'jashn', label: 'Jashn' },
                           { id: 'majlis', label: 'Majlis' },
                           { id: 'nauha', label: 'Nauha' },
@@ -1052,7 +1204,7 @@ export default function App() {
                         );
                       })}
 
-                      {availableYears.map((yyyy) => {
+                      {postedMonthMeta.years.map((yyyy) => {
                         const active = selectedVideoMonth === yyyy;
                         return (
                           <button
@@ -1079,7 +1231,11 @@ export default function App() {
 
                     <select
                       aria-label="Filter videos by month"
-                      value={selectedVideoMonth.length === 7 ? selectedVideoMonth : 'all'}
+                      value={
+                        postedMonthMeta.months.some((m) => m.key === selectedVideoMonth)
+                          ? selectedVideoMonth
+                          : 'all'
+                      }
                       onChange={(e) => {
                         const nextMonth = e.target.value;
                         setSelectedVideoMonth(nextMonth);
@@ -1090,16 +1246,13 @@ export default function App() {
                       className="h-8.5 px-3.5 text-xs font-medium rounded-full bg-white dark:bg-[#17171D] text-[#0F0F12] dark:text-[#F3F3F6] border border-black/[0.08] dark:border-white/[0.1] focus:outline-none cursor-pointer"
                     >
                       <option value="all">
-                        Filter by Month ({config.available_months.length} months)...
+                        Filter by Month ({postedMonthMeta.months.length} months)...
                       </option>
-                      {config.available_months.map((m) => {
-                        const key = `${m.yyyy}-${m.mm.padStart(2, '0')}`;
-                        return (
-                          <option key={key} value={key}>
-                            {m.month_year} ({m.video_count})
-                          </option>
-                        );
-                      })}
+                      {postedMonthMeta.months.map((m) => (
+                        <option key={m.key} value={m.key}>
+                          {m.month_year} ({m.count})
+                        </option>
+                      ))}
                     </select>
                   </div>
 

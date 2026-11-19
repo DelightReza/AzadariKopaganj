@@ -256,6 +256,22 @@ def update_build_gradle(app_build_gradle: Path) -> None:
     )
 
 
+def update_root_build_gradle(root_build_gradle: Path) -> None:
+    if not root_build_gradle.is_file():
+        return
+    mirror_url = "https://maven-central.storage-download.googleapis.com/maven2/"
+    text = root_build_gradle.read_text(encoding="utf-8")
+    if mirror_url in text:
+        return
+    updated = text.replace(
+        "mavenCentral()",
+        f'maven {{ url "{mirror_url}" }}\n        mavenCentral()',
+    )
+    if updated != text:
+        root_build_gradle.write_text(updated, encoding="utf-8")
+        print(f"[configure_android_app] Added Google Maven Central mirror to {root_build_gradle}")
+
+
 def main() -> None:
     android_dir = Path("android")
     if not android_dir.is_dir():
@@ -268,6 +284,7 @@ def main() -> None:
     update_notification_icon(res_dir)
     update_android_manifest(android_dir / "app" / "src" / "main" / "AndroidManifest.xml")
     install_background_sync_sources(android_dir)
+    update_root_build_gradle(android_dir / "build.gradle")
     update_build_gradle(android_dir / "app" / "build.gradle")
 
 

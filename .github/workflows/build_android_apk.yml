@@ -99,11 +99,23 @@ jobs:
           INPUT_VERSION_CODE: ${{ github.event.inputs.version_code || github.run_number || '1' }}
         run: python3 configure_android_app.py
 
+      - name: Set up Gradle Cache
+        uses: gradle/actions/setup-gradle@v4
+
       - name: Assemble Release APK & AAB via Gradle
         working-directory: android
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease bundleRelease --no-daemon
+          for attempt in 1 2 3; do
+            if ./gradlew assembleRelease bundleRelease --no-daemon; then
+              exit 0
+            fi
+            if [ "$attempt" -lt 3 ]; then
+              echo "Gradle build attempt $attempt failed (possible Maven Central hiccup); retrying in 15s..."
+              sleep 15
+            fi
+          done
+          exit 1
 
       - name: Zipalign, Sign with apksigner (V1/V2/V3) & Verify Signature
         run: |

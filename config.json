@@ -5,7 +5,7 @@
   "channel_url": "https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA",
   "rss_url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCyCIC43pbujKarf1irIjtrA",
   "live_url": "https://www.youtube.com/channel/UCyCIC43pbujKarf1irIjtrA/live",
-  "last_updated": "2026-11-26T13:36:06Z",
+  "last_updated": "2026-11-27T00:20:45Z",
   "endpoints": {
     "live": "assets/livenow.json",
     "videos_month_template": "assets/{yyyy}/{mm}/videos.json",
